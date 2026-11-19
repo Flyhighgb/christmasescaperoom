@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>The Midnight Workshop</title>
+  <meta name="description" content="A cooperative Christmas escape room you play together in the browser.">
+  <meta name="theme-color" content="#0d1830">
+  <meta property="og:title" content="The Midnight Workshop">
+  <meta property="og:description" content="Restart Christmas before midnight! A cooperative escape room for the whole family.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500..900;1,9..144,500..800&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="snow" aria-hidden="true"></canvas>
+  <div id="app"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="conn" hidden>Reconnecting to the workshop…</div>
+  <script src="art.js"></script>
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
