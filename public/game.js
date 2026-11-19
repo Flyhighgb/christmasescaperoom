@@ -23,6 +23,12 @@
   const SCENES = { parlour: 'The Parlour', workshop: "Grandpa's Workshop", attic: 'The Clock Tower' };
   const VIEW_NAMES = { cards: 'the Christmas cards', album: 'the photo album', watch: 'the pocket watch', pocket: 'their pocket', present: 'the present', letter: 'the letter', door: 'the door', bells: 'the bells', tiles: 'the painting', ledger: 'the ledger', cabinet: 'the cabinet', gears: 'the clock mechanism', wheel: 'the cipher wheel', final: 'the plaque', telescope: 'the telescope' };
   const GAME_MS = 90 * 60 * 1000;
+  const ROOM_ORDER = ['parlour', 'workshop', 'attic'];
+  // Where the "camera" flies to when walking between rooms (forward = deeper into the house).
+  const DOORWAY = { 'parlour>workshop': '94% 58%', 'workshop>attic': '76% 2%', 'workshop>parlour': '20% 94%', 'attic>workshop': '90% 96%', 'parlour>attic': '50% 50%', 'attic>parlour': '50% 50%' };
+  const LEDGER_CLUES = ['Neither Pip nor Juniper made the rocking horse.', 'Bramble is scared of horses, even wooden ones.', 'The teddy bear was made by either Tansy or Juniper.', "Pip can't stand loud noises and has never made a drum.", 'Juniper works next to the elf who made the kite.'];
+  const TAG_DOTS = ['red', 'gold', 'blue', 'purple'];
+  const ENGRAVING = 'OJBZOCZM';
   const SOLVE_TEXT = { present: 'The present is open!', memory: 'All the pairs are matched!', door: 'The workshop door is open!', bells: "That's Grandpa's tune!", tiles: 'The painting is fixed!', spot: 'All five differences found!', cabinet: 'The cabinet is open!', hatch: 'The attic hatch is open!', watch: 'The watch clicks open!', gears: 'The Great Clock is ticking!', final: 'Midnight!' };
   const PRAISE = ['Brilliant!', 'You did it!', 'Grandpa would be so proud!', 'Amazing teamwork!', 'Ooh, clever!', 'Yes! Well done!'];
   const OOPS = ["Hmm, not quite. Have another think!", "Nearly! Try again.", "Oops! That's not it. Keep going!"];
@@ -43,9 +49,19 @@
   let ws = null, wsReady = false, queue = [], backoff = 800;
   function connect() {
     ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-    ws.onopen = () => { wsReady = true; backoff = 800; $('#conn').hidden = true; if (joinMsg) ws.send(JSON.stringify(joinMsg)); queue.forEach((m) => ws.send(m)); queue = []; };
+    ws.onopen = () => { wsReady = true; backoff = 800; $('#conn').hidden = true; if (joinMsg) ws.send(JSON.stringify(joinWire())); queue.forEach((m) => ws.send(m)); queue = []; };
     ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } onMsg(m); };
     ws.onclose = () => { wsReady = false; if (joinMsg && joinMsg.t === 'join') $('#conn').hidden = false; setTimeout(connect, backoff); backoff = Math.min(backoff * 1.6, 8000); };
+  }
+  // Every device keeps a copy of the game, so if the server restarts the room can be rebuilt.
+  function saveSnap() {
+    if (!S || !S.startedAt) return;
+    store.set('mw-snap', JSON.stringify({ code: S.code, startedAt: S.startedAt, finishedAt: S.finishedAt, pausedAt: S.pausedAt, host: S.host, game: S.game }));
+  }
+  function joinWire() {
+    const j = { ...joinMsg };
+    if (j.t === 'join') { try { const sn = JSON.parse(store.get('mw-snap', 'null')); if (sn && sn.code === j.code) j.snap = sn; } catch (e) {} }
+    return j;
   }
   function send(m) { const s = JSON.stringify(m); if (wsReady) ws.send(s); else if (m.t !== 'cur' && m.t !== 'lens') queue.push(s); }
   const act = (m) => send({ t: 'act', ...m });
@@ -61,7 +77,7 @@
       case 'err': joinMsg = null; if (screen === 'loading') showLanding(); showErr(m.msg); break;
       case 'state': {
         const first = !S;
-        S = m.s; skew = S.now - Date.now();
+        S = m.s; skew = S.now - Date.now(); saveSnap();
         if (first) lastLogLen = S.log.length;
         route();
         break;
@@ -84,6 +100,14 @@
   const initials = (n) => esc((n || '?').trim().charAt(0).toUpperCase());
   const avatar = (p, extra = '') => `<div class="avatar ${extra}" style="background:${p.color}">${initials(p.name)}${extra.includes('where') ? '' : ''}</div>`;
   const fmt = (ms) => { const s = Math.floor(Math.abs(ms) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  // Split clues: each online player gets a different share of a list (solo players get everything).
+  function myShare(len) {
+    const online = S.players.filter((p) => p.online).sort((a, b) => a.order - b.order);
+    const n = Math.max(1, online.length), idx = Math.max(0, online.findIndex((p) => p.id === pid));
+    return { mine: Array.from({ length: len }, (_, i) => i % n === idx), n };
+  }
+  const isHost = () => !!S && (S.host === pid || !(playerById(S.host) || {}).online);
+  const roomMice = (room) => { const i = ROOM_ORDER.indexOf(room) * 3; return S.game.mice ? S.game.mice.slice(i, i + 3).filter(Boolean).length : 0; };
   function introSeen() { return store.get('mw-intro-' + S.code + '-' + S.startedAt, '') === '1'; }
 
   // ---------- routing ----------
@@ -150,7 +174,7 @@
         if (c.length !== 4) { showErr('Room codes have 4 letters.'); return; }
         joinMsg = { t: 'join', code: c, name, pid };
       }
-      send(joinMsg);
+      send(joinWire());
     };
     $('#create').onclick = () => go('create');
     $('#join').onclick = () => go('join');
@@ -188,27 +212,36 @@
     $('#lobbyPlayers').innerHTML = S.players.slice().sort((a, b) => a.order - b.order).map((p) => `<div class="pchip ${p.online ? '' : 'offline'}">${avatar(p)}${esc(p.name)}${p.id === pid ? ' <span style="opacity:.6">(you)</span>' : ''}</div>`).join('');
   }
 
-  // ---------- INTRO ----------
+  // ---------- INTRO (animated opening scene) ----------
   function showIntro() {
     if (screen === 'intro') return;
     screen = 'intro'; document.body.classList.remove('in-game');
     const pages = [
       'Christmas Eve. <em>11:59 pm.</em><br>Snow has buried Grandpa Tobias\'s cottage right up to the windowsills.',
-      'High in the attic stands the <em>Great Clock</em>, the old toymaker\'s masterpiece. Every year it strikes midnight, and Christmas morning arrives.',
-      'But tonight, the clock has <em>stopped</em>. Grandpa has gone out into the snow for help, leaving behind a letter… and a house full of puzzles.',
+      'Up in the attic stands the <em>Great Clock</em>, the old toymaker\'s masterpiece. Every year it strikes midnight, and Christmas morning arrives.',
+      'But tonight the clock has <em>stopped</em>. Grandpa has set off through the snow to fetch help, leaving behind a letter… and a house full of puzzles.',
       'His apprentice, <em>Elsie the elf</em>, is waiting inside to help you. Listen to her when you\'re not sure what to do!',
-      'Work together. Share everything you find.<br>Restart the Great Clock, and <em>save Christmas!</em>',
+      'Some clues only appear on <em>your</em> screen, so talk to each other!<br>Restart the Great Clock, and <em>save Christmas!</em>',
     ];
-    $('#app').innerHTML = `<div class="intro">
-      <div><svg class="clockface" viewBox="-60 -60 120 120"><circle r="54" fill="#f7eedc" stroke="#d8a845" stroke-width="6"/>${Array.from({ length: 12 }, (_, i) => { const a = i / 12 * Math.PI * 2; return `<circle cx="${(Math.sin(a) * 42).toFixed(1)}" cy="${(-Math.cos(a) * 42).toFixed(1)}" r="${i % 3 ? 2 : 3.5}" fill="#2a2f45"/>`; }).join('')}<path d="M0 0 L-1 -26" stroke="#1d2233" stroke-width="5" stroke-linecap="round"/><path d="M0 0 L-4 -40" stroke="#1d2233" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#d8a845"/></svg>
-      ${pages.map((p, i) => `<div class="page" data-i="${i}" style="${i ? 'display:none' : ''}">${p}</div>`).join('')}</div>
-      <div class="controls"><button class="btn ghost small" id="skip">Skip</button><button class="btn gold small" id="next">Next</button></div></div>`;
+    $('#app').innerHTML = `<div class="intro" data-p="0">
+      <div class="intro-art">${ART.landing()}
+        <svg class="intro-over" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+          <g class="attic-glow"><circle cx="1110" cy="515" r="80" fill="url(#gWarm)"/><circle cx="1110" cy="515" r="20" fill="#ffcf6a" stroke="#4a2c22" stroke-width="5"/><path d="M1110 495 v40 M1090 515 h40" stroke="#4a2c22" stroke-width="4"/></g>
+          <g class="steps">${Array.from({ length: 12 }, (_, i) => `<ellipse cx="${1060 - i * 78}" cy="${752 + (i % 2) * 8}" rx="9" ry="4" fill="#7286ad" style="transition-delay:${(i * 0.45).toFixed(2)}s"/>`).join('')}</g>
+          <g transform="translate(1100 752)"><g class="gp-walk"><g transform="scale(.45) translate(-110 -370)"><g class="gp-bob">${ART.grandpa.replace('<svg ', '<svg width="220" height="380" ')}</g></g></g></g>
+        </svg>
+      </div>
+      <div class="intro-elsie">${ART.elsie}</div>
+      <div class="intro-text">${pages.map((p, i) => `<div class="page" data-i="${i}" style="${i ? 'display:none' : ''}">${p}</div>`).join('')}</div>
+      <div class="controls"><div class="dots">${pages.map((_, i) => `<i data-i="${i}"></i>`).join('')}</div><button class="btn ghost small" id="skip">Skip</button><button class="btn gold small" id="next">Next</button></div></div>`;
     let i = 0, timer;
     const show = () => {
+      $('.intro').dataset.p = i;
       $$('.intro .page').forEach((el) => { el.style.display = +el.dataset.i === i ? '' : 'none'; el.classList.remove('on'); });
+      $$('.intro .dots i').forEach((d) => d.classList.toggle('on', +d.dataset.i === i));
       requestAnimationFrame(() => requestAnimationFrame(() => { const el = $(`.intro .page[data-i="${i}"]`); if (el) el.classList.add('on'); }));
       $('#next').textContent = i === pages.length - 1 ? "Let's go!" : 'Next';
-      clearTimeout(timer); timer = setTimeout(next, 6500);
+      clearTimeout(timer); timer = setTimeout(next, i === 2 ? 8500 : 6500);
       SFX.unlock();
     };
     const done = () => { clearTimeout(timer); store.set('mw-intro-' + S.code + '-' + S.startedAt, '1'); screen = null; route(); };
@@ -237,14 +270,20 @@
         <div class="spacer"></div>
         <div class="players" id="hudPlayers"></div>
         <button class="icon-btn" id="btnChat" title="Chat">💬<span class="badge" id="chatBadge" hidden>0</span></button>
-        <button class="icon-btn" id="btnMusic" title="Music">🎵</button>
+        <button class="icon-btn" id="btnMusic" title="Music and sound">🎵</button>
         <button class="icon-btn" id="btnSound" title="Sound">🔊</button>
+        <button class="icon-btn" id="btnHost" title="Host controls">⚙️</button>
+        ${document.fullscreenEnabled ? '<button class="icon-btn" id="btnFull" title="Full screen">⛶</button>' : ''}
+        <div class="vol-pop" id="volPop" hidden>
+          <label class="vrow"><span>Music</span><input type="range" min="0" max="100" id="volMusic"></label>
+          <label class="vrow"><span>Sound effects</span><input type="range" min="0" max="100" id="volSfx"></label>
+          <button class="btn ghost small" id="musicToggle" style="width:100%"></button>
+        </div>
       </header>
       <main class="viewport" id="viewport">
         <div class="stage" id="stage">
-          <div class="scene" data-scene="parlour">${ART.parlour()}</div>
-          <div class="scene" data-scene="workshop">${ART.workshop(BELL_X)}</div>
-          <div class="scene" data-scene="attic">${ART.attic()}</div>
+          ${ROOM_ORDER.map((r) => `<div class="scene" data-scene="${r}">${r === 'workshop' ? ART.workshop(BELL_X) : ART[r]()}<div class="mice">${ART.MICE.map(([x, y], i) => Math.floor(i / 3) === ROOM_ORDER.indexOf(r) ? `<button class="mouse" data-mouse="${i}" style="left:${x - 30}px;top:${y - 44}px" aria-label="A little mouse"></button>` : '').join('')}</div></div>`).join('')}
+          <div class="paused" id="paused" hidden><div class="pcard"><div class="big">⏸</div><h3>Paused</h3><p id="pausedBy"></p><button class="btn gold" id="resumeBtn" hidden>Carry on</button></div></div>
           <div class="scene-name" id="sceneName"></div>
           <div class="modal-layer" id="modalLayer"></div>
           <div id="fxLayer" style="position:absolute;inset:0;pointer-events:none;z-index:42"></div>
@@ -263,6 +302,8 @@
         <button class="robin-btn" id="btnHint">${elsieFace()}<span>Ask Elsie for a hint</span></button>
       </footer>
       <aside class="panel" id="hintPanel"><header>${elsieFace()}<h4>Elsie's hints</h4><button class="icon-btn" data-close>×</button></header><div class="body" id="hintBody"></div></aside>
+      <aside class="panel" id="hostPanel"><header><span style="font-size:26px">⚙️</span><h4>Host controls</h4><button class="icon-btn" data-close>×</button></header><div class="body" id="hostBody"></div></aside>
+      <div class="rotate"><div><div class="phone">📱</div><b>Turn your phone sideways</b><p>The workshop is much easier to explore in landscape.</p></div></div>
       <aside class="panel" id="chatPanel"><header><h4>Chat</h4><button class="icon-btn" data-close>×</button></header><div class="body"><div class="chatlog" id="chatLog"></div></div>
         <form class="chatform" id="chatForm"><input class="field" id="chatIn" maxlength="200" placeholder="Say something…" autocomplete="off"><button class="btn gold small">Send</button></form></aside>
     </div>`;
@@ -276,6 +317,7 @@
       const w = vp.clientWidth, hh = vp.clientHeight;
       k = Math.min(w / 1600, hh / 900);
       stage.style.transform = `translate(${(w - 1600 * k) / 2}px, ${(hh - 900 * k) / 2}px) scale(${k})`;
+      stage.classList.toggle('small', k < 0.6);
     };
     fit(); addEventListener('resize', fit); new ResizeObserver(fit).observe($('#viewport'));
 
@@ -302,10 +344,24 @@
 
     // HUD buttons
     $('#roomChip').onclick = async () => { const link = `${location.origin}/?room=${S.code}`; try { await navigator.clipboard.writeText(link); toast('Invite link copied!'); } catch (e) { prompt('Invite link:', link); } };
-    const syncAudioBtns = () => { $('#btnSound').classList.toggle('off', SFX.state.muted); $('#btnSound').textContent = SFX.state.muted ? '🔇' : '🔊'; $('#btnMusic').classList.toggle('off', !SFX.state.music); };
+    const syncAudioBtns = () => {
+      $('#btnSound').classList.toggle('off', SFX.state.muted); $('#btnSound').textContent = SFX.state.muted ? '🔇' : '🔊'; $('#btnMusic').classList.toggle('off', !SFX.state.music);
+      $('#musicToggle').textContent = SFX.state.music ? 'Turn the music off' : 'Turn the music on';
+      $('#volMusic').value = Math.round(SFX.state.musicVol * 100); $('#volSfx').value = Math.round(SFX.state.sfxVol * 100);
+    };
     $('#btnSound').onclick = () => { SFX.setMuted(!SFX.state.muted); syncAudioBtns(); };
-    $('#btnMusic').onclick = () => { SFX.setMusic(!SFX.state.music); syncAudioBtns(); };
+    $('#btnMusic').onclick = (e) => { e.stopPropagation(); SFX.unlock(); $('#volPop').hidden = !$('#volPop').hidden; syncAudioBtns(); };
+    $('#volPop').onclick = (e) => e.stopPropagation();
+    document.addEventListener('click', () => { const vp = $('#volPop'); if (vp) vp.hidden = true; });
+    $('#musicToggle').onclick = () => { SFX.setMusic(!SFX.state.music); syncAudioBtns(); };
+    $('#volMusic').oninput = (e) => { SFX.setMusicVol(e.target.value / 100); if (!SFX.state.music && +e.target.value > 0) SFX.setMusic(true); syncAudioBtns(); };
+    $('#volSfx').oninput = (e) => { SFX.setSfxVol(e.target.value / 100); };
+    $('#volSfx').onchange = () => SFX.pop();
     syncAudioBtns();
+    if ($('#btnFull')) $('#btnFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+    $('#btnHost').onclick = () => { if (togglePanel('#hostPanel')) renderHost(); SFX.pop(); };
+    $('#resumeBtn').onclick = () => send({ t: 'host', a: 'resume' });
+    $$('.mouse').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); if (S.game.mice && S.game.mice[+b.dataset.mouse]) return; SFX.squeak(); act({ a: 'mouse', i: +b.dataset.mouse }); }));
     const togglePanel = (id) => { const p = $(id); const on = !p.classList.contains('on'); $$('.panel').forEach((x) => x.classList.remove('on')); p.classList.toggle('on', on); return on; };
     $('#btnHint').onclick = () => { togglePanel('#hintPanel'); renderHints(); SFX.pop(); };
     $('#btnChat').onclick = () => { if (togglePanel('#chatPanel')) { unread = 0; renderChat(); setTimeout(() => $('#chatIn').focus(), 300); } };
@@ -329,13 +385,24 @@
 
   function goScene(s, silent) {
     if (!S.game.scenes.includes(s)) return;
-    const changed = s !== scene;
+    const changed = s !== scene, from = scene;
     scene = s;
+    const oldEl = $(`.scene[data-scene="${from}"]`), newEl = $(`.scene[data-scene="${s}"]`);
+    if (changed && !silent && oldEl && newEl) {
+      // Walk through the doorway: the old room rushes towards you, the new one settles into place.
+      const fwd = ROOM_ORDER.indexOf(s) > ROOM_ORDER.indexOf(from);
+      const origin = DOORWAY[`${from}>${s}`] || '50% 50%';
+      oldEl.style.transformOrigin = origin; newEl.style.transformOrigin = fwd ? '50% 50%' : DOORWAY[`${s}>${from}`] || '50% 50%';
+      newEl.style.transition = 'none'; newEl.style.transform = fwd ? 'scale(.86)' : 'scale(1.35)'; void newEl.offsetWidth;
+      newEl.style.transition = ''; newEl.style.transform = '';
+      oldEl.classList.add(fwd ? 'leave-fwd' : 'leave-back');
+      setTimeout(() => oldEl.classList.remove('leave-fwd', 'leave-back'), 1100);
+    }
     $$('.scene').forEach((el) => el.classList.toggle('on', el.dataset.scene === s));
     const nm = $('#sceneName'); nm.textContent = SCENES[s]; nm.classList.add('show'); clearTimeout(nm._t); nm._t = setTimeout(() => nm.classList.remove('show'), 2200);
     $('#sceneLabel').textContent = SCENES[s];
     if (changed && !silent) { SFX.whoosh(); sendWhere(); }
-    if (changed) { elsieLast = ''; setTimeout(updateElsie, 700); }
+    if (changed) { elsieLast = ''; elsieBusyUntil = 0; setTimeout(updateElsie, 700); }
     for (const [id, c] of cursors) c.el.style.display = c.s === scene ? '' : 'none';
   }
 
@@ -412,12 +479,44 @@
     $('[data-hs="gears"]').classList.toggle('nudge', (has('brassGear') || has('silverGear') || has('copperGear')) && scene === 'attic');
     if (g.solved.final) { $('#aHour').style.transform = 'rotate(0deg)'; $('#aMin').style.transform = 'rotate(0deg)'; }
     else { $('#aHour').style.transform = 'rotate(-0.5deg)'; $('#aMin').style.transform = 'rotate(-6deg)'; }
+    // hidden mice
+    $$('.mouse').forEach((b) => {
+      const f = !!(g.mice && g.mice[+b.dataset.mouse]);
+      if (b.dataset.f !== String(f)) { b.dataset.f = String(f); b.innerHTML = ART.mouse(f); b.classList.toggle('found', f); }
+    });
+    // pause
+    const pz = $('#paused');
+    pz.hidden = !S.pausedAt || !!S.finishedAt;
+    if (S.pausedAt) {
+      const host = playerById(S.host);
+      $('#pausedBy').textContent = isHost() ? 'Take a break! Press the button when everyone is ready.' : `${host ? host.name : 'The host'} has paused the game. Hang on!`;
+      $('#resumeBtn').hidden = !isHost();
+    }
+    if ($('#hostPanel').classList.contains('on')) renderHost();
+  }
+
+  // ---------- host controls ----------
+  function renderHost() {
+    const g = S.game, host = playerById(S.host);
+    const body = $('#hostBody'); if (!body) return;
+    if (!isHost()) { body.innerHTML = `<p class="muted">Only ${esc(host ? host.name : 'the host')} (who made the room) can use these. If they leave, anyone can.</p>`; return; }
+    const open = S.puzzles.filter((p) => g.scenes.includes(p.scene) && !g.solved[p.id]);
+    if (g.scenes.includes('workshop') && !g.solved.hatch) open.push({ id: 'hatch', title: 'The attic hatch' });
+    body.innerHTML = `
+      <div class="hostcard"><h5>The clock</h5>${S.pausedAt ? '<button class="btn gold small" data-h="resume">▶ Carry on</button>' : '<button class="btn ghost small" data-h="pause">⏸ Pause the game</button>'}<p class="muted">Pausing stops the timer and the puzzles for everyone.</p></div>
+      <div class="hostcard"><h5>Skip a puzzle</h5><p class="muted">For when everyone's really stuck. Elsie's hints are free too!</p>
+        ${open.length ? open.map((p) => `<button class="btn ghost small skipbtn" data-skip="${p.id}">Skip: ${esc(p.title)}</button>`).join('') : '<p class="muted">Nothing to skip right now.</p>'}</div>
+      <div class="hostcard"><h5>Start again from a room</h5><p class="muted">Everything before that room is done for you. Handy if something goes wrong.</p>
+        <div class="row" style="flex-wrap:wrap;gap:8px">${ROOM_ORDER.map((r) => `<button class="btn ghost small" data-restart="${r}">${SCENES[r]}</button>`).join('')}</div></div>`;
+    $$('[data-h]', body).forEach((b) => (b.onclick = () => send({ t: 'host', a: b.dataset.h })));
+    $$('[data-skip]', body).forEach((b) => (b.onclick = () => { if (confirm(`Skip "${b.textContent.replace('Skip: ', '')}" for everyone?`)) send({ t: 'host', a: 'skip', p: b.dataset.skip }); }));
+    $$('[data-restart]', body).forEach((b) => (b.onclick = () => { if (confirm(`Start again from ${b.textContent}? Everyone goes back to that room.`)) send({ t: 'host', a: 'restart', room: b.dataset.restart }); }));
   }
 
   // timer
   function tickTimer() {
     const el = $('#timer'); if (!el || !S || !S.startedAt) return;
-    const end = S.finishedAt || (Date.now() + skew);
+    const end = S.finishedAt || S.pausedAt || (Date.now() + skew);
     const left = GAME_MS - (end - S.startedAt);
     el.querySelector('span').textContent = left >= 0 ? fmt(left) : '+' + fmt(left);
     el.classList.toggle('over', left < 0);
@@ -472,7 +571,8 @@
         SFX.correct(); setTimeout(SFX.chime, 300);
         sparkles(800, 420, 40);
         const who = m.by === pid ? 'You' : (playerById(m.by) || {}).name || 'Someone';
-        if (m.p !== 'final') {
+        if (m.p !== 'final' && m.skipped) verdict(true, SOLVE_TEXT[m.p] || 'Skipped!', `${who} skipped ${(m.p === 'hatch' ? 'the attic hatch' : puzzleTitle(m.p)).toLowerCase()}`);
+        else if (m.p !== 'final') {
           verdict(true, SOLVE_TEXT[m.p] || 'Correct!', `${who === 'You' ? 'You' : who} solved ${puzzleTitle(m.p).toLowerCase()}${m.reward ? ` and found: ${ART.itemName[m.reward]}` : ''}`);
           elsieReact(PRAISE[Math.floor(Math.random() * PRAISE.length)] + (m.reward ? ` We found the ${ART.itemName[m.reward].toLowerCase()}!` : ''));
         }
@@ -504,6 +604,21 @@
       }
       case 'hint': SFX.pop(); if (m.by !== pid) toast(`🧝 ${(playerById(m.by) || {}).name || 'Someone'} got a hint from Elsie about ${puzzleTitle(m.p).toLowerCase()}.`); if ($('#hintPanel').classList.contains('on')) renderHints(); break;
       case 'chat': if (m.by !== pid && !$('#chatPanel').classList.contains('on')) { unread++; SFX.pop(); const b = $('#chatBadge'); b.hidden = false; b.textContent = unread; } break;
+      case 'mouse': {
+        SFX.squeak();
+        const who = m.by === pid ? 'You' : (playerById(m.by) || {}).name || 'Someone';
+        const el = $(`.mouse[data-mouse="${m.i}"]`); if (el) { const r = ART.MICE[m.i]; sparkles(r[0], r[1] - 20, 16); }
+        if (m.n >= 3) {
+          verdict(true, 'All three mice found!', 'They squeak a secret clue…');
+          setTimeout(() => { elsieBusyUntil = Date.now() + 12000; elsieSay(`The mice told me a secret! ${ART.MOUSE_CLUES[m.room]}`, 14000); setTimeout(() => { elsieLast = ''; updateElsie(); }, 14500); }, 1500);
+        } else verdict(true, `${who} found a mouse!`, `${m.n} of 3 mice found in this room`);
+        break;
+      }
+      case 'restart':
+        closeModal(); finaleRunning = false;
+        toast(`${(playerById(m.by) || {}).name || 'The host'} started again from ${SCENES[m.room]}.`);
+        setTimeout(() => goScene(m.room), 50);
+        break;
       case 'reset': screen = null; route(); break;
     }
   }
@@ -534,8 +649,8 @@
   function objective() {
     const g = S.game, sv = (p) => !!g.solved[p];
     if (scene === 'parlour') {
-      if (!sv('present') && !sv('memory')) return "Hi, I'm Elsie! Grandpa's locked everything up. Let's start with the present under the tree. Its tag has coloured dots… and look at all those Christmas cards on the mantelpiece!";
-      if (!sv('present')) return 'The present under the tree has a number lock. Look at the coloured dots on the tag, then count the baubles on the tree!';
+      if (!sv('present') && !sv('memory')) return "Hi, I'm Elsie! Grandpa's locked everything up. Start with the present under the tree: its tag got torn, so each of you sees different coloured dots. Share them! Kids: three little mice are hiding in every room. Find them and they'll tell you a secret!";
+      if (!sv('present')) return 'The present under the tree has a number lock. Everyone has a different bit of the gift tag, so read your dots out loud, then count those baubles on the tree!';
       if (!sv('memory')) return 'Grandpa hid something behind his Christmas cards on the mantelpiece. Turn them over and find all the matching pairs!';
       if (!sv('door')) return has('doorKey') ? "We've got the key! Now read Grandpa's letter on the desk through the red lens to find the secret word for the door." : "Read Grandpa's letter on the desk. Try looking at it through that red lens!";
       return 'The workshop door is open! Come on, through the door on the right!';
@@ -544,14 +659,14 @@
       if (!sv('bells')) return "This is Grandpa's workshop! His bell melody was torn up and shared between you. Check your pocket, read your pieces out loud, and ring the bells in order.";
       if (!sv('tiles')) return "Someone's scrambled Grandpa's painting! Turn the squares until the picture's right, and remember what it shows.";
       if (!sv('spot')) return "Grandpa's photo album is on the workbench. Two photos, five differences. Can you spot them all?";
-      if (!sv('cabinet')) return "The elves' ledger on the workbench says who made which toy. Work it out together, then set the dials on the toy cabinet.";
+      if (!sv('cabinet')) return "The elves' ledger on the workbench says who made which toy, but each of you can only read some of the clues. Read yours out, work it out together, then set the dials on the toy cabinet. Kids: have you found the three workshop mice?";
       if (!sv('hatch')) return 'That little star key must fit the hatch in the ceiling! Click the ladder to climb up.';
       return 'The hatch is open! Climb the ladder up to the clock tower!';
     }
     if (scene === 'attic') {
       if (!sv('watch')) return "The Great Clock! It's missing three gears. Grandpa's pocket watch on the side table might hold one. He always set it by the village clock in his painting.";
       if (!sv('gears')) return 'We need all three gears: brass, silver and copper. Open the glass case under the clock and fit them in!';
-      if (!sv('final')) return "It's ticking! Now the plaque needs a secret word. Use the cipher wheel to decode it. Remember the banner in the painting?";
+      if (!sv('final')) return "It's ticking! Now the plaque needs a secret word. Frost covers it, and each of you can see different letters, so put them together. Then use the cipher wheel to decode it. Remember the banner in the painting?";
       return 'You did it! Merry Christmas!';
     }
     return '';
@@ -568,7 +683,9 @@
     const list = S.puzzles.filter((p) => g.scenes.includes(p.scene) && !g.solved[p.id]);
     list.sort((a, b) => (b.scene === scene) - (a.scene === scene));
     const total = Object.values(g.hints).reduce((a, b) => a + b, 0);
+    const mice = ROOM_ORDER.filter((r) => g.scenes.includes(r)).map((r) => { const n = roomMice(r); return `<p>🐭 <b>${SCENES[r]}:</b> ${n} of 3 mice found${n >= 3 ? `<br><span class="answer" style="display:block;margin-top:4px">${esc(ART.MOUSE_CLUES[r])}</span>` : ''}</p>`; }).join('');
     $('#hintBody').innerHTML = `<p class="muted" style="margin-top:0">Hints are shared with everyone. ${total ? `You've used ${total} so far.` : 'Try a bit first, then ask if you get stuck!'}</p>` +
+      `<div class="hintcard kidjob"><h5>Kid job: find the mice</h5><p class="muted" style="margin-top:0">Three little mice are hiding in every room. Find all three and they squeak a secret clue!</p>${mice}</div>` +
       (list.length ? list.map((p) => {
         const n = g.hints[p.id] || 0;
         return `<div class="hintcard"><h5>${esc(p.title)} <span class="muted" style="font-size:13px">· ${esc(SCENES[p.scene])}</span></h5>
@@ -637,13 +754,17 @@
     present: {
       title: 'The locked present',
       build: () => `<div class="mrow">
-          <svg class="tag-big" viewBox="0 0 320 240"><path d="M10 120 Q0 30 60 20" stroke="#d9c38a" stroke-width="3" fill="none"/><path d="M40 40 L300 30 L310 220 L50 230 L20 130Z" fill="#f7eedc" stroke="#cdb88a" stroke-width="3"/><circle cx="44" cy="128" r="9" fill="#2a1f18"/>
+          <div class="tagwrap"><svg class="tag-big" viewBox="0 0 320 240"><path d="M10 120 Q0 30 60 20" stroke="#d9c38a" stroke-width="3" fill="none"/><path d="M40 40 L300 30 L310 220 L50 230 L20 130Z" fill="#f7eedc" stroke="#cdb88a" stroke-width="3"/><circle cx="44" cy="128" r="9" fill="#2a1f18"/>
             <text x="170" y="78" text-anchor="middle" font-family="Fraunces, serif" font-style="italic" font-size="24" fill="#5a4636">For my clever ones.</text>
-            ${['red', 'gold', 'blue', 'purple'].map((c, i) => `<circle cx="${100 + i * 56}" cy="135" r="20" fill="${HEX[c]}"/><circle cx="${100 + i * 56}" cy="135" r="20" fill="url(#gShade)"/>`).join('')}
-            <text x="170" y="200" text-anchor="middle" font-family="Fraunces, serif" font-style="italic" font-size="20" fill="#5a4636">Count carefully! x</text></svg>
+            <g id="tagDots"></g>
+            <text x="170" y="200" text-anchor="middle" font-family="Fraunces, serif" font-style="italic" font-size="20" fill="#5a4636">Count carefully! x</text></svg><p class="splitnote" id="tagNote"></p></div>
           <div class="mcol" id="presentCol"></div></div>`,
       update(el) {
         const col = $('#presentCol', el);
+        // Each player can only see their own torn piece of the tag.
+        const sh = myShare(4);
+        $('#tagDots', el).innerHTML = TAG_DOTS.map((c, i) => { const x = 100 + i * 56; return sh.mine[i] || solved('present') ? `<circle cx="${x}" cy="135" r="20" fill="${HEX[c]}"/><circle cx="${x}" cy="135" r="20" fill="url(#gShade)"/>` : `<circle cx="${x}" cy="135" r="20" fill="none" stroke="#b7a37a" stroke-width="2.5" stroke-dasharray="5 5"/><text x="${x}" y="144" text-anchor="middle" font-family="Fraunces, serif" font-size="24" font-weight="800" fill="#b7a37a">?</text>`; }).join('');
+        $('#tagNote', el).textContent = sh.n > 1 && !solved('present') ? `🧩 The tag is torn! You can only see ${sh.mine.some(Boolean) ? 'some of the dots' : 'none of the dots'}. The others have the rest, so read yours out loud.` : '';
         if (solved('present')) {
           if (col.dataset.state === 'done') return; col.dataset.state = 'done';
           col.innerHTML = `${banner('The lid pops open!')}${foundBox('lens', 'Inside, wrapped in tissue paper: <b>a red glass lens</b>. Grandpa always said red glass sees through red ink…')}`;
@@ -789,18 +910,19 @@
       build: () => `<div class="book">
         <div class="pg"><h4>Christmas Eve</h4>
           <p style="margin-top:0">Four elves each made one toy for the sleigh. I locked the toys away, and set the cabinet's dials so each elf matches the toy they made. —T.</p>
-          <ol>
-            <li>Neither Pip nor Juniper made the rocking horse.</li>
-            <li>Bramble is scared of horses, even wooden ones.</li>
-            <li>The teddy bear was made by either Tansy or Juniper.</li>
-            <li>Pip can't stand loud noises and has never made a drum.</li>
-            <li>Juniper works next to the elf who made the kite.</li>
-          </ol></div>
+          <ol id="lclues"></ol><p class="splitnote" id="lnote"></p></div>
         <div class="pg"><h4>Working out</h4><p class="muted" style="color:#7a6a58;margin:0 0 12px;font-size:17px">Tap a box for ✗, tap again for ✓. Everyone shares this page.</p>
           <div class="grid" id="lgrid"><div></div>${TOYS.map((t) => `<div class="h" title="${ART.toyName[t]}">${ART.toy[t]}</div>`).join('')}
             ${ELVES.map((e, r) => `<div class="rh">${e}</div>${TOYS.map((t, c) => `<button data-i="${r * 4 + c}" aria-label="${e} made the ${ART.toyName[t]}"></button>`).join('')}`).join('')}</div></div></div>`,
       bind(el) { $$('#lgrid button', el).forEach((b) => (b.onclick = () => { SFX.tick(); act({ a: 'grid', i: +b.dataset.i }); })); },
-      update(el) { $$('#lgrid button', el).forEach((b, i) => { const v = S.game.pz.grid[i]; b.textContent = ['', '✗', '✓'][v]; b.classList.toggle('yes', v === 2); }); },
+      update(el) {
+        $$('#lgrid button', el).forEach((b, i) => { const v = S.game.pz.grid[i]; b.textContent = ['', '✗', '✓'][v]; b.classList.toggle('yes', v === 2); });
+        // The page got smudged: each player can read different clues.
+        const sh = myShare(LEDGER_CLUES.length);
+        const html = LEDGER_CLUES.map((c, i) => sh.mine[i] ? `<li>${esc(c)}</li>` : '<li class="smudge">Smudged on your page. Ask the others!</li>').join('');
+        if ($('#lclues', el).innerHTML !== html) $('#lclues', el).innerHTML = html;
+        $('#lnote', el).textContent = sh.n > 1 ? '🧩 Everyone can read different clues. Read yours out loud!' : '';
+      },
     },
 
     cabinet: {
@@ -939,9 +1061,14 @@
     final: {
       title: 'The engraved plaque',
       build: () => `<p class="lede">A brass plaque below the Great Clock. The engraving is in some kind of code…</p>
-        <div class="engraving">${'OJBZOCZM'.split('').map((c) => `<span>${c}</span>`).join('')}</div>
+        <div class="engraving" id="engr"></div><p class="splitnote" id="engrNote" style="text-align:center"></p>
         <div id="finalBody" style="margin-top:20px"></div>`,
       update(el) {
+        // Frost covers the plaque: each player can make out different letters.
+        const sh = myShare(ENGRAVING.length);
+        const ehtml = ENGRAVING.split('').map((c, i) => sh.mine[i] || solved('final') ? `<span>${c}</span>` : '<span class="frost">❄</span>').join('');
+        if ($('#engr', el).innerHTML !== ehtml) $('#engr', el).innerHTML = ehtml;
+        $('#engrNote', el).textContent = sh.n > 1 && !solved('final') ? '🧩 Frost covers the plaque, and everyone can make out different letters. Put them together!' : '';
         const body = $('#finalBody', el);
         if (solved('final')) { body.innerHTML = banner('BONG! The clock strikes midnight!'); return; }
         if (!solved('gears')) { if (body.dataset.state !== 'wait') { body.dataset.state = 'wait'; body.innerHTML = '<p class="muted" style="font-size:22px">Underneath it says: <i>"Speak my word when my heart is ticking."</i> The clock is silent. Its insides must be broken.</p>'; } return; }
@@ -960,10 +1087,8 @@
   };
 
   function piecesHtml(big) {
-    const online = S.players.filter((p) => p.online).sort((a, b) => a.order - b.order);
-    const idx = Math.max(0, online.findIndex((p) => p.id === pid));
-    const n = Math.max(1, online.length);
-    const mine = FRAGS.filter((_, i) => i % n === idx);
+    const sh = myShare(FRAGS.length), n = sh.n;
+    const mine = FRAGS.filter((_, i) => sh.mine[i]);
     const others = n > 1 ? `<p class="muted">${n === 2 ? 'The other player has' : `The other ${n - 1} players have`} the rest. Ask them!</p>` : '<p class="muted">You\'re playing solo, so you hold every piece.</p>';
     return `<h4 style="${big ? 'color:var(--gold-soft)' : ''}">Your torn pieces</h4>` + (mine.length ? mine.map((f) => `<div class="scrap"><span class="flakes">${'❄'.repeat(f.n)}</span>${f.notes.map((c) => `<div class="note" style="background:${HEX[c]}"></div>`).join('')}</div>`).join('') : '<p class="muted">You have no pieces. The others have them all!</p>') + others;
   }
@@ -1001,7 +1126,7 @@
     if (screen === 'victory') return updateVictory();
     screen = 'victory';
     document.body.classList.remove('in-game');
-    const el = h(`<div class="victory"><canvas id="fw"></canvas><div class="card">
+    const el = h(`<div class="victory"><canvas id="fw"></canvas><div class="v-grandpa">${ART.grandpa}</div><div class="card">
       <div class="kicker">The Great Clock strikes midnight</div>
       <h1 class="title">Merry Christmas!</h1>
       <p class="tagline" style="margin-bottom:6px">You saved Christmas morning! Grandpa Tobias stamps the snow off his boots, sees the clock ticking, and laughs: "I knew you could do it, <i>together</i>."</p>
@@ -1019,7 +1144,7 @@
     const hints = Object.values(S.game.hints).reduce((a, b) => a + b, 0);
     const t = S.finishedAt - S.startedAt;
     const vs = $('#vstats'); if (!vs) return;
-    vs.innerHTML = `<div class="stat"><b>${fmt(t)}</b><span>Escape time</span></div><div class="stat"><b>${hints}</b><span>Hints from Elsie</span></div><div class="stat"><b>${t < GAME_MS ? fmt(GAME_MS - t) : '0:00'}</b><span>To spare</span></div>`;
+    vs.innerHTML = `<div class="stat"><b>${fmt(t)}</b><span>Escape time</span></div><div class="stat"><b>${hints}</b><span>Hints from Elsie</span></div><div class="stat"><b>${t < GAME_MS ? fmt(GAME_MS - t) : '0:00'}</b><span>To spare</span></div><div class="stat"><b>${(S.game.mice || []).filter(Boolean).length}/9</b><span>Mice found</span></div>`;
     $('#vplayers').innerHTML = S.players.slice().sort((a, b) => a.order - b.order).map((p) => `<div class="pchip">${avatar(p)}${esc(p.name)}</div>`).join('');
   }
   function fireworks(c) {
@@ -1049,6 +1174,9 @@
   setInterval(() => { if (S) fetch('/health', { cache: 'no-store' }).catch(() => {}); }, 4 * 60 * 1000);
 
   // ---------- boot ----------
+  // Phones and tablets only allow sound after a tap, so wake the audio on the first touch.
+  ['touchend', 'pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, () => SFX.unlock(), { passive: true }));
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {} // iPhone: play even with the silent switch on
   connect();
   const params = new URLSearchParams(location.search);
   const urlRoom = (params.get('room') || '').toUpperCase();

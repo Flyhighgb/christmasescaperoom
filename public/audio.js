@@ -1,8 +1,8 @@
 // Synthesised sound for The Midnight Workshop (no audio files needed).
 // Music: traditional (public-domain) carols arranged for celesta, bass, pad and sleigh bells.
 (function () {
-  let ctx = null, master = null, musicGain = null, musicTimer = null, noiseBuf = null;
-  const S = { muted: false, music: true };
+  let ctx = null, out = null, master = null, musicGain = null, musicTimer = null, noiseBuf = null;
+  const S = { muted: false, music: true, musicVol: 0.5, sfxVol: 0.8 };
   try { const saved = JSON.parse(localStorage.getItem('mw-audio2') || '{}'); Object.assign(S, saved); } catch (e) {}
   const save = () => { try { localStorage.setItem('mw-audio2', JSON.stringify(S)); } catch (e) {} };
 
@@ -10,12 +10,14 @@
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return true; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
     ctx = new AC();
-    master = ctx.createGain(); master.gain.value = S.muted ? 0 : 0.8;
-    const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+    // out (mute) <- master (sound effects volume) and musicGain (music volume)
+    out = ctx.createGain(); out.gain.value = S.muted ? 0 : 1;
+    master = ctx.createGain(); master.gain.value = S.sfxVol; master.connect(out);
+    const comp = ctx.createDynamicsCompressor(); out.connect(comp); comp.connect(ctx.destination);
     // a little room reverb for warmth
     const verb = ctx.createConvolver(); verb.buffer = impulse(2.2); const vg = ctx.createGain(); vg.gain.value = 0.22;
-    musicGain = ctx.createGain(); musicGain.gain.value = 0.5;
-    musicGain.connect(master); musicGain.connect(verb); verb.connect(vg); vg.connect(master);
+    musicGain = ctx.createGain(); musicGain.gain.value = S.musicVol;
+    musicGain.connect(out); musicGain.connect(verb); verb.connect(vg); vg.connect(out);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
     const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
     if (S.music) startMusic();
@@ -145,7 +147,10 @@
       for (let i = 0; i < 12; i++) bellAt(196, t + i * 0.55, 0.32);
       [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => bellAt(f, t + 6.8 + i * 0.07, 0.2));
     },
-    setMuted(m) { S.muted = m; save(); if (ensure()) master.gain.setTargetAtTime(m ? 0 : 0.8, ctx.currentTime, 0.05); },
+    setMuted(m) { S.muted = m; save(); if (ensure()) out.gain.setTargetAtTime(m ? 0 : 1, ctx.currentTime, 0.05); },
+    setMusicVol(v) { S.musicVol = Math.max(0, Math.min(1, v)); save(); if (ensure()) musicGain.gain.setTargetAtTime(S.musicVol, ctx.currentTime, 0.05); },
+    setSfxVol(v) { S.sfxVol = Math.max(0, Math.min(1, v)); save(); if (ensure()) master.gain.setTargetAtTime(S.sfxVol, ctx.currentTime, 0.05); },
+    squeak() { if (!ensure()) return; const t = ctx.currentTime; [0, 0.11].forEach((d) => { const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(1800, t + d); o.frequency.exponentialRampToValueAtTime(3200, t + d + 0.06); o.frequency.exponentialRampToValueAtTime(2200, t + d + 0.09); g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.09, t + d + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.1); o.connect(g); g.connect(master); o.start(t + d); o.stop(t + d + 0.12); }); },
     setMusic(on) { S.music = on; save(); if (!ensure()) return; on ? startMusic() : stopMusic(); },
   };
 

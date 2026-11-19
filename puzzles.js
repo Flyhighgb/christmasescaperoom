@@ -13,6 +13,74 @@ const SPOT_COUNT = 5;
 const WATCH = { h: 7, m: 30 };
 const GEAR_ITEMS = ['brassGear', 'silverGear', 'copperGear'];
 const GEAR_NAMES = ['brass', 'silver', 'copper'];
+const ROOMS = ['parlour', 'workshop', 'attic'];
+const MICE_PER_ROOM = 3; // kid job: hidden mice, 3 per room (indexes 0-2 parlour, 3-5 workshop, 6-8 attic)
+// What each puzzle leaves behind when it is solved (used by the real solve and by the host's "skip").
+const FORCE = {
+  present: (g) => { g.pz.present = PRESENT.split('').map(Number); },
+  memory: (g) => { g.pz.mem.done = g.pz.mem.deck.map((_, i) => i); g.pz.mem.up = []; g.pz.mem.lock = false; },
+  door: (g) => { g.inv = g.inv.filter((x) => x !== 'doorKey'); if (!g.scenes.includes('workshop')) g.scenes.push('workshop'); },
+  bells: () => {},
+  tiles: (g) => { g.pz.tiles = g.pz.tiles.map(() => 0); },
+  spot: (g) => { g.pz.spot = g.pz.spot.map(() => true); },
+  cabinet: (g) => { g.pz.dials = CABINET.slice(); },
+  hatch: (g) => { g.inv = g.inv.filter((x) => x !== 'starKey'); if (!g.scenes.includes('attic')) g.scenes.push('attic'); },
+  watch: (g) => { g.pz.watch = { ...WATCH }; },
+  gears: (g) => { g.pz.gears = [true, true, true]; g.inv = g.inv.filter((x) => !GEAR_ITEMS.includes(x)); },
+  final: () => {},
+};
+const REWARD = { present: 'lens', memory: 'doorKey', bells: 'brassGear', spot: 'silverGear', cabinet: 'starKey', watch: 'copperGear' };
+// Don't hand out an item whose job is already done (e.g. a gear after the clock was fixed by a skip).
+function give(g, item) {
+  if (!item || g.inv.includes(item)) return;
+  if (GEAR_ITEMS.includes(item) && g.solved.gears) return;
+  if (item === 'doorKey' && g.solved.door) return;
+  if (item === 'starKey' && g.solved.hatch) return;
+  g.inv.push(item);
+}
+// Host "skip": solve a puzzle as if the team had done it.
+function forceSolve(g, id) {
+  if (!FORCE[id] || g.solved[id] || !g.scenes.includes(SCENE_OF[id])) return false;
+  g.solved[id] = Date.now();
+  FORCE[id](g);
+  give(g, REWARD[id]);
+  return true;
+}
+// Host "start again from a room": a fresh game with every earlier room already done.
+function startFrom(room) {
+  const g = freshGame();
+  const upto = ROOMS.indexOf(room);
+  for (const id of Object.keys(SCENE_OF)) {
+    if (ROOMS.indexOf(SCENE_OF[id]) < upto) forceSolve(g, id);
+  }
+  // Anything collected in earlier rooms that later rooms need stays in the satchel.
+  return g;
+}
+// Rebuild a game from a player's saved copy (after a server restart). Only known fields are kept.
+function sanitizeGame(snap) {
+  const g = freshGame();
+  const prim = (v) => ['string', 'number', 'boolean'].includes(typeof v);
+  const merge = (base, src) => {
+    if (!src || typeof src !== 'object') return base;
+    for (const key of Object.keys(base)) {
+      const b = base[key], v = src[key];
+      if (v === undefined) continue;
+      if (Array.isArray(b)) { if (Array.isArray(v) && v.length <= 40 && v.every(prim)) base[key] = v.slice(); }
+      else if (b && typeof b === 'object') merge(b, v);
+      else if (typeof v === typeof b) base[key] = v;
+    }
+    return base;
+  };
+  merge(g, snap);
+  g.scenes = g.scenes.filter((x) => ROOMS.includes(x)); if (!g.scenes.includes('parlour')) g.scenes.unshift('parlour');
+  for (const src of ['solved', 'hints']) {
+    const o = (snap && snap[src]) || {};
+    for (const id of Object.keys(SCENE_OF)) if (typeof o[id] === 'number') g[src][id] = o[id];
+  }
+  g.pz.mem.up = []; g.pz.mem.lock = false;
+  if (g.pz.mem.deck.length !== 16) g.pz.mem = freshGame().pz.mem;
+  return g;
+}
 
 // Which scene each puzzle lives in (an action only works once its scene is open).
 const SCENE_OF = {
@@ -23,7 +91,7 @@ const SCENE_OF = {
 
 const PUZZLES = [
   { id: 'present', scene: 'parlour', title: 'The locked present', hints: [
-    'The gift tag on the present under the tree shows four coloured dots. Where else in the room do you see those colours?',
+    'The gift tag on the present has four coloured dots, but it got torn, so each player sees only some of them. Read yours out loud! Where else in the room do you see those colours?',
     'Count the round baubles on the Christmas tree, one colour at a time, in the same order as the dots on the tag.',
     'Red 4, Gold 2, Blue 5, Purple 3. The code is 4 2 5 3.' ] },
   { id: 'memory', scene: 'parlour', title: 'The Christmas cards', hints: [
@@ -47,7 +115,7 @@ const PUZZLES = [
     'Look closely at the snowman, the tree, the windows, the sledge and the sky.',
     "The snowman's nose, the star on the tree, a lit window, the sledge colour and the moon." ] },
   { id: 'cabinet', scene: 'workshop', title: 'The toy cabinet', hints: [
-    "The elves' ledger on the workbench has clues about which elf made which toy. Use the grid in the ledger to tick and cross things off together.",
+    "The elves' ledger on the workbench has five clues about which elf made which toy, but each player can only read some of them. Read yours out loud, and tick and cross the grid together.",
     'Neither Pip nor Juniper made the horse, and Bramble is scared of horses. So Tansy made the horse. What does that tell you about the teddy?',
     'Pip: Kite. Bramble: Drum. Tansy: Rocking horse. Juniper: Teddy bear. Then pull the handle.' ] },
   { id: 'watch', scene: 'attic', title: "Grandpa's pocket watch", hints: [
@@ -58,8 +126,8 @@ const PUZZLES = [
     'The Great Clock is missing three gears. Different puzzles gave you each one.',
     'The brass gear comes from the bells, the silver gear from the photo album, and the copper gear from the pocket watch. Click each empty spindle to fit them.' ] },
   { id: 'final', scene: 'attic', title: 'The engraved plaque', hints: [
-    'The engraving under the clock is written in code. The cipher wheel on the stand can decode it.',
-    "The workshop painting's banner said: star under F. Turn the inner wheel until the star sits under F, then find each engraved letter on the inner ring and read the letter just outside it.",
+    'The engraving under the clock is in code, and frost hides different letters from each player. Put all eight letters together, then use the cipher wheel on the stand to decode it.',
+    "The letters are O J B Z O C Z M. The workshop painting's banner said: star under F. Turn the inner wheel until the star sits under F, then find each engraved letter on the inner ring and read the letter just outside it.",
     'The word is TOGETHER.' ] },
 ];
 
@@ -69,6 +137,7 @@ function freshGame() {
   return {
     scenes: ['parlour'],
     inv: [],
+    mice: new Array(ROOMS.length * MICE_PER_ROOM).fill(false),
     solved: {},
     hints: {},
     pz: {
@@ -95,7 +164,7 @@ function act(game, player, m) {
   const open = (pid) => game.scenes.includes(SCENE_OF[pid]);
   const solve = (pid, logText, reward) => {
     game.solved[pid] = Date.now();
-    if (reward) game.inv.push(reward);
+    give(game, reward);
     out.fx.push({ fx: 'solve', p: pid, by: player.id, reward });
     out.log = logText;
   };
@@ -133,6 +202,16 @@ function act(game, player, m) {
           out.later = { ms: 1200, m: { a: 'memHide' } };
         }
       }
+      return out;
+    }
+    case 'mouse': {
+      const i = m.i | 0; if (i < 0 || i >= game.mice.length || game.mice[i]) return out;
+      const room = ROOMS[Math.floor(i / MICE_PER_ROOM)];
+      if (!game.scenes.includes(room)) return out;
+      game.mice[i] = true;
+      const n = game.mice.slice(ROOMS.indexOf(room) * MICE_PER_ROOM, (ROOMS.indexOf(room) + 1) * MICE_PER_ROOM).filter(Boolean).length;
+      out.fx.push({ fx: 'mouse', i, n, room, by: player.id });
+      out.log = n === MICE_PER_ROOM ? `${name} found the last mouse! The mice squeak a secret clue.` : `${name} found a hidden mouse! (${n} of ${MICE_PER_ROOM} in this room)`;
       return out;
     }
     case 'memHide': { game.pz.mem.up = []; game.pz.mem.lock = false; return out; }
@@ -249,4 +328,4 @@ function act(game, player, m) {
   return out;
 }
 
-module.exports = { PUZZLES, BELLS, MELODY, freshGame, act };
+module.exports = { PUZZLES, BELLS, MELODY, ROOMS, freshGame, act, forceSolve, startFrom, sanitizeGame };

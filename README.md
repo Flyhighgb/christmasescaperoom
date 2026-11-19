@@ -9,6 +9,15 @@ An original, cooperative, multiplayer Christmas escape room that runs in the bro
 - **Length:** 11 puzzles across 3 rooms, about 45 to 90 minutes. The 90-minute timer keeps counting as "overtime" if you go past it, so nobody loses.
 - **Multiplayer:** one person creates a room and shares the 4-letter code or link. Everyone sees the same puzzles, live cursors, emoji pings, the shared satchel, chat and hints. The bell puzzle splits its clues between players, so people have to talk to each other.
 
+## Extras
+
+- **Host controls (⚙️):** the person who made the room can pause the timer, skip a puzzle, or start again from any room.
+- **Kid job:** three mice hide in every room. Find them all and Elsie shares a secret clue.
+- **Split clues:** the gift tag, the elves' ledger and the plaque show different pieces to different players, as well as the bell melody.
+- **Auto-save:** every device keeps a copy of the game. If the server restarts, the room rebuilds itself as soon as someone reconnects.
+- **Sound:** 🎵 opens separate music and sound-effect volume sliders.
+- **Phones:** play in landscape. Tablets and laptops are best.
+
 ## Play it on your own computer (2 minutes)
 
 1. Install Node.js 18 or newer from https://nodejs.org

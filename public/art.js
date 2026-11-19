@@ -494,7 +494,7 @@
     <!-- plaque -->
     ${hs('final', 'An engraved brass plaque', `
       <g filter="url(#fShadow)"><rect x="600" y="650" width="400" height="58" rx="10" fill="url(#gBrass)" stroke="#7a5418" stroke-width="3"/>
-      <text x="800" y="690" text-anchor="middle" font-family="Fraunces, serif" font-size="34" font-weight="700" letter-spacing="10" fill="#4a3210">OJBZOCZM</text>
+      <text x="800" y="690" text-anchor="middle" font-family="Fraunces, serif" font-size="34" font-weight="700" letter-spacing="10" fill="#4a3210" opacity=".22">OJBZOCZM</text><g opacity=".7" pointer-events="none">${[[680, 676, 70], [770, 682, 60], [850, 674, 74], [920, 683, 50]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="20" fill="#eef6ff" opacity=".55"/>`).join('')}${[700, 790, 880].map((x) => `<path transform="translate(${x} 680)" d="M0 -12 V12 M-10 -6 L10 6 M-10 6 L10 -6" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>`).join('')}</g>
       ${[612, 988].map((x) => `<circle cx="${x}" cy="679" r="4" fill="#7a5418"/>`).join('')}</g>`)}
 
     <!-- mechanism case -->
@@ -741,6 +741,60 @@
         <rect x="62" y="70" width="96" height="20" rx="10" fill="url(#eFur)"/>
         <g class="e-bell"><circle cx="178" cy="28" r="10" fill="#f2b632" stroke="#c48b16" stroke-width="2"/><circle cx="178" cy="32" r="2.5" fill="#7a5418"/></g>
       </g>
+    </g>
+  </svg>`;
+
+  // ---------- kid job: hidden mice ----------
+  // [x, y] = where the mouse's feet sit on the 1600x900 stage. 0-2 parlour, 3-5 workshop, 6-8 attic.
+  A.MICE = [[250, 104], [985, 800], [1505, 246], [500, 210], [800, 430], [880, 722], [330, 44], [1330, 406], [1070, 814]];
+  A.mouse = (found) => `<svg viewBox="0 0 80 60" class="mouse-svg" aria-hidden="true">
+    <path d="M62 44 Q78 40 76 26 Q75 18 68 20" stroke="#9a8f98" stroke-width="3" fill="none" stroke-linecap="round" class="m-tail"/>
+    <ellipse cx="44" cy="44" rx="22" ry="14" fill="#a99fab"/><ellipse cx="40" cy="40" rx="14" ry="7" fill="#c3bac5" opacity=".7"/>
+    <g class="m-head"><circle cx="20" cy="22" r="9" fill="#a99fab"/><circle cx="20" cy="22" r="5" fill="#f6b8c4"/><circle cx="36" cy="20" r="9" fill="#a99fab"/><circle cx="36" cy="20" r="5" fill="#f6b8c4"/>
+      <ellipse cx="24" cy="36" rx="15" ry="12" fill="#b7adb9"/><path d="M10 38 L4 40 Q8 44 14 42Z" fill="#b7adb9"/><circle cx="6" cy="40" r="3" fill="#e2687e"/>
+      <circle cx="20" cy="32" r="3" fill="#1d1418"/><circle cx="21" cy="31" r="1" fill="#fff"/>
+      <path d="M8 38 l-8 -4 M8 41 l-8 1 M10 43 l-7 5" stroke="#6d6470" stroke-width="1"/></g>
+    <path d="M30 56 h8 M48 56 h8" stroke="#e2687e" stroke-width="3" stroke-linecap="round"/>
+    ${found ? '<g transform="translate(44 4)"><path d="M0 6 C0 -2 12 -2 12 6 C12 12 4 16 0 20 C-4 16 -12 12 -12 6 C-12 -2 0 -2 0 6Z" fill="#ff4d6d" stroke="#fff" stroke-width="2"/></g><path d="M18 44 q6 4 12 0" stroke="#d7263d" stroke-width="5" fill="none" stroke-linecap="round"/>' : ''}
+  </svg>`;
+  A.MOUSE_CLUES = {
+    parlour: "Squeak! Grandpa's favourite spice is the one in Christmas buns. It begins with C!",
+    workshop: 'Squeak squeak! Tansy made the rocking horse, and Pip made the kite!',
+    attic: 'Squeak! On the brass plaque, O means T and Z means E!',
+  };
+
+  // ---------- Grandpa Tobias ----------
+  A.grandpa = `<svg viewBox="0 0 220 380" class="grandpa-svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="gpCoat" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4a3424"/><stop offset=".45" stop-color="#7d5a3c"/><stop offset="1" stop-color="#3a281b"/></linearGradient>
+      <radialGradient id="gpSkin" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#ffe2cc"/><stop offset=".7" stop-color="#f0b996"/><stop offset="1" stop-color="#d08a66"/></radialGradient>
+      <linearGradient id="gpBeard" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfd8e6"/></linearGradient>
+      <pattern id="gpTweed" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M0 10 L10 0 M-2 2 L2 -2 M8 12 L12 8" stroke="#00000022" stroke-width="2"/></pattern>
+      <radialGradient id="gpGlow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".85"/><stop offset=".5" stop-color="#ffb347" stop-opacity=".25"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
+    </defs>
+    <ellipse cx="110" cy="368" rx="70" ry="9" fill="#000" opacity=".35"/>
+    <g class="gp-legs"><rect class="gp-leg1" x="84" y="290" width="22" height="70" rx="8" fill="#2e2a33"/><rect class="gp-leg2" x="114" y="290" width="22" height="70" rx="8" fill="#26222a"/>
+      <path d="M78 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#3a2214"/><path d="M110 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#311d11"/></g>
+    <path d="M62 150 Q110 132 158 150 L172 306 Q110 318 48 306Z" fill="url(#gpCoat)"/><path d="M62 150 Q110 132 158 150 L172 306 Q110 318 48 306Z" fill="url(#gpTweed)"/>
+    <path d="M110 150 V306" stroke="#2a1c12" stroke-width="3"/>${[180, 214, 248, 282].map((y) => `<circle cx="120" cy="${y}" r="5" fill="#c9a24a"/>`).join('')}
+    <path d="M58 160 Q34 210 44 262 L62 260 Q56 214 76 176Z" fill="#5c4230"/><circle cx="52" cy="266" r="11" fill="url(#gpSkin)"/>
+    <g class="gp-lantern"><path d="M162 160 Q186 206 182 246 L166 248 Q168 210 150 178Z" fill="#5c4230"/><circle cx="174" cy="252" r="11" fill="url(#gpSkin)"/>
+      <circle cx="176" cy="300" r="70" fill="url(#gpGlow)" class="gp-glow"/>
+      <path d="M176 254 v12" stroke="#2a1c12" stroke-width="3"/><path d="M164 268 h24 l-4 8 h-16z" fill="#2b2b30"/>
+      <rect x="164" y="276" width="24" height="34" rx="4" fill="#ffcf6a" stroke="#2b2b30" stroke-width="4"/><path d="M176 280 q-5 10 0 20 q5 -10 0 -20Z" fill="#ff8a2a"/><rect x="161" y="310" width="30" height="7" rx="2" fill="#2b2b30"/></g>
+    <path d="M70 142 Q110 168 152 142 L158 162 Q110 184 64 162Z" fill="#2f8a57"/><path d="M128 160 l10 56 l-16 2 l-4 -54Z" fill="#287a4c"/>${[176, 190, 204].map((y) => `<path d="M124 ${y} h14" stroke="#d7263d" stroke-width="3"/>`).join('')}
+    <g class="gp-head">
+      <circle cx="110" cy="100" r="40" fill="url(#gpSkin)"/>
+      <circle cx="70" cy="104" r="9" fill="url(#gpSkin)"/><circle cx="150" cy="104" r="9" fill="url(#gpSkin)"/>
+      <path d="M72 106 Q66 160 110 174 Q154 160 148 106 Q140 128 110 128 Q80 128 72 106Z" fill="url(#gpBeard)"/>
+      <path d="M90 126 Q110 118 130 126 Q120 136 110 132 Q100 136 90 126Z" fill="#fff"/>
+      <ellipse cx="110" cy="114" rx="9" ry="7" fill="#eb9c86"/>
+      <circle cx="94" cy="98" r="11" fill="#ffffff22" stroke="#c9a24a" stroke-width="3"/><circle cx="126" cy="98" r="11" fill="#ffffff22" stroke="#c9a24a" stroke-width="3"/><path d="M105 98 h10" stroke="#c9a24a" stroke-width="3"/>
+      <g class="gp-eyes"><circle cx="94" cy="99" r="3.4" fill="#2a1a10"/><circle cx="126" cy="99" r="3.4" fill="#2a1a10"/></g>
+      <path d="M82 84 q12 -8 22 -2 M116 82 q12 -6 22 2" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <circle cx="84" cy="114" r="7" fill="#ff7b86" opacity=".35"/><circle cx="136" cy="114" r="7" fill="#ff7b86" opacity=".35"/>
+      <path d="M68 78 Q72 50 110 48 Q150 50 154 78 Q160 82 166 80 Q160 92 110 86 Q64 88 68 78Z" fill="#5a4a3a"/><path d="M68 78 Q72 50 110 48 Q150 50 154 78 Q160 82 166 80 Q160 92 110 86 Q64 88 68 78Z" fill="url(#gpTweed)"/>
+      <path d="M74 80 Q110 90 162 80" stroke="#3a2e22" stroke-width="3" fill="none"/>
     </g>
   </svg>`;
 

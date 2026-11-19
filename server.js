@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
-const { PUZZLES, freshGame, act } = require('./puzzles');
+const { PUZZLES, ROOMS, freshGame, act, forceSolve, startFrom, sanitizeGame } = require('./puzzles');
 
 const PORT = process.env.PORT || 3000;
 const PUB = path.join(__dirname, 'public');
@@ -39,15 +39,14 @@ function newCode() {
   do { c = Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join(''); } while (rooms.has(c));
   return c;
 }
-function newRoom() {
-  const code = newCode();
-  const room = { code, created: Date.now(), startedAt: null, finishedAt: null, players: {}, order: 0, game: freshGame(), log: [], chat: [], touched: Date.now() };
+function newRoom(code = newCode()) {
+  const room = { code, created: Date.now(), startedAt: null, finishedAt: null, pausedAt: null, host: null, players: {}, order: 0, game: freshGame(), log: [], chat: [], touched: Date.now() };
   rooms.set(code, room);
   return room;
 }
 function publicState(room) {
   return {
-    code: room.code, startedAt: room.startedAt, finishedAt: room.finishedAt, now: Date.now(),
+    code: room.code, startedAt: room.startedAt, finishedAt: room.finishedAt, pausedAt: room.pausedAt || null, host: room.host, now: Date.now(),
     players: Object.values(room.players).map(({ id, name, color, order, online, scene, view }) => ({ id, name, color, order, online, scene, view })),
     game: room.game, log: room.log.slice(-40), chat: room.chat.slice(-40), puzzles: PUZZLES,
   };
@@ -86,8 +85,22 @@ setInterval(() => {
   for (const [c, r] of rooms) if (r.touched < cutoff && !(sockets.get(c) || new Set()).size) rooms.delete(c);
 }, 36e5);
 
+function restoreRoom(code, snap, pid) {
+  const room = newRoom(code);
+  room.game = sanitizeGame(snap.game);
+  const num = (v) => (typeof v === 'number' && v > 0 && v <= Date.now() + 6e4 ? v : null);
+  room.startedAt = num(snap.startedAt); room.finishedAt = num(snap.finishedAt); room.pausedAt = num(snap.pausedAt);
+  if (room.finishedAt && !room.game.solved.final) room.finishedAt = null;
+  room.host = typeof snap.host === 'string' ? clip(snap.host, 40) : pid;
+  addLog(room, 'The workshop was restored from a saved copy. Carry on!');
+  console.log(`Restored room ${code} from a player's saved copy.`);
+  return room;
+}
+const hostOk = (room, player) => player.id === room.host || !(room.players[room.host] && room.players[room.host].online);
+const HOST_PUZZLES = new Set(PUZZLES.map((p) => p.id).concat('hatch'));
+
 // ---------- websocket ----------
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 8 * 1024 });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
 
 wss.on('connection', (ws) => {
   ws.alive = true;
@@ -103,9 +116,12 @@ wss.on('connection', (ws) => {
       if (room) return;
       const name = clip(m.name, 18) || 'Elf';
       const pid = clip(m.pid, 40) || Math.random().toString(36).slice(2);
-      if (m.t === 'create') room = newRoom();
+      if (m.t === 'create') { room = newRoom(); room.host = pid; }
       else {
-        room = rooms.get(clip(m.code, 8).toUpperCase());
+        const code = clip(m.code, 8).toUpperCase();
+        room = rooms.get(code);
+        // The server restarted and forgot the room: rebuild it from this player's saved copy.
+        if (!room && m.snap && m.snap.code === code && /^[A-Z]{4}$/.test(code)) room = restoreRoom(code, m.snap, pid);
         if (!room) { room = null; return send(ws, { t: 'err', msg: "We couldn't find that room code. Check it and try again." }); }
       }
       player = room.players[pid];
@@ -159,13 +175,14 @@ wss.on('connection', (ws) => {
         const n = room.game.hints[pz.id] || 0;
         if (n >= pz.hints.length) return;
         room.game.hints[pz.id] = n + 1;
-        addLog(room, `${player.name} asked Robin for a hint about ${pz.title.toLowerCase()}.`);
+        addLog(room, `${player.name} asked Elsie for a hint about ${pz.title.toLowerCase()}.`);
         pushState(room);
         broadcast(room.code, { t: 'fx', fx: 'hint', p: pz.id, by: player.id });
         break;
       }
       case 'act': {
         if (!room.startedAt || room.finishedAt) return;
+        if (room.pausedAt) return send(ws, { t: 'toast', msg: 'The game is paused. Ask the host to carry on.' });
         const out = act(room.game, player, m);
         if (out.err) send(ws, { t: 'toast', msg: out.err });
         addLog(room, out.log);
@@ -178,8 +195,31 @@ wss.on('connection', (ws) => {
         }
         break;
       }
+      case 'host': {
+        if (!room.startedAt || !hostOk(room, player)) return;
+        const now = Date.now(), g = room.game;
+        if (m.a === 'pause' && !room.pausedAt && !room.finishedAt) { room.pausedAt = now; addLog(room, `${player.name} paused the game.`); }
+        else if (m.a === 'resume' && room.pausedAt) { room.startedAt += now - room.pausedAt; room.pausedAt = null; addLog(room, `${player.name} started the clock again.`); }
+        else if (m.a === 'skip' && !room.finishedAt && HOST_PUZZLES.has(m.p)) {
+          if (!forceSolve(g, m.p)) return;
+          const title = (PUZZLES.find((p) => p.id === m.p) || { title: 'the attic hatch' }).title.toLowerCase();
+          addLog(room, `${player.name} skipped ${title}.`);
+          if (g.solved.final && !room.finishedAt) { room.finishedAt = room.pausedAt || now; room.pausedAt = null; }
+          pushState(room);
+          return broadcast(room.code, { t: 'fx', fx: 'solve', p: m.p, by: player.id, skipped: true });
+        } else if (m.a === 'restart' && ROOMS.includes(m.room)) {
+          room.game = startFrom(m.room); room.finishedAt = null;
+          if (room.pausedAt) { room.startedAt += now - room.pausedAt; room.pausedAt = null; }
+          for (const p of Object.values(room.players)) { p.scene = m.room; p.view = null; }
+          addLog(room, `${player.name} started again from ${{ parlour: 'the Parlour', workshop: "Grandpa's Workshop", attic: 'the Clock Tower' }[m.room]}.`);
+          pushState(room);
+          return broadcast(room.code, { t: 'fx', fx: 'restart', room: m.room, by: player.id });
+        } else return;
+        pushState(room);
+        break;
+      }
       case 'reset': {
-        room.game = freshGame(); room.startedAt = null; room.finishedAt = null; room.log = [];
+        room.game = freshGame(); room.startedAt = null; room.finishedAt = null; room.pausedAt = null; room.log = [];
         for (const p of Object.values(room.players)) { p.scene = 'parlour'; p.view = null; }
         addLog(room, `${player.name} reset the room for another go.`);
         pushState(room);
