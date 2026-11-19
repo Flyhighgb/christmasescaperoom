@@ -716,9 +716,8 @@
     </defs>
     <ellipse cx="110" cy="350" rx="74" ry="9" fill="#000" opacity=".4"/>
     <g class="e-body">
-      <rect x="84" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/><rect x="116" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/>
-      <path d="M104 334 H78 Q58 334 54 320 Q66 326 76 322 L104 322Z" fill="#1f6b4a"/><circle cx="54" cy="318" r="5" fill="#f2b632"/>
-      <path d="M116 334 H142 Q162 334 166 320 Q154 326 144 322 L116 322Z" fill="#1f6b4a"/><circle cx="166" cy="318" r="5" fill="#f2b632"/>
+      <g class="e-leg e-leg1"><rect x="84" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/><path d="M104 334 H78 Q58 334 54 320 Q66 326 76 322 L104 322Z" fill="#1f6b4a"/><circle cx="54" cy="318" r="5" fill="#f2b632"/></g>
+      <g class="e-leg e-leg2"><rect x="116" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/><path d="M116 334 H142 Q162 334 166 320 Q154 326 144 322 L116 322Z" fill="#1f6b4a"/><circle cx="166" cy="318" r="5" fill="#f2b632"/></g>
       <path d="M72 150 Q110 138 148 150 L178 262 Q110 282 42 262Z" fill="url(#eTunic)"/>
       <path d="M42 262 l10 12 10 -10 12 12 12 -10 12 12 12 -10 12 12 12 -10 12 12 12 -10 10 10 L178 262 Q110 282 42 262Z" fill="url(#eFur)"/>
       <rect x="58" y="204" width="104" height="15" rx="4" fill="#2a1a12"/><rect x="100" y="201" width="20" height="21" rx="3" fill="none" stroke="#f2b632" stroke-width="4"/>
@@ -773,15 +772,16 @@
       <radialGradient id="gpGlow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".85"/><stop offset=".5" stop-color="#ffb347" stop-opacity=".25"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
     </defs>
     <ellipse cx="110" cy="368" rx="70" ry="9" fill="#000" opacity=".35"/>
-    <g class="gp-legs"><rect class="gp-leg1" x="84" y="290" width="22" height="70" rx="8" fill="#2e2a33"/><rect class="gp-leg2" x="114" y="290" width="22" height="70" rx="8" fill="#26222a"/>
-      <path d="M78 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#3a2214"/><path d="M110 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#311d11"/></g>
+    <g class="gp-leg gp-leg1"><rect x="84" y="290" width="22" height="70" rx="8" fill="#2e2a33"/><path d="M78 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#3a2214"/></g>
+    <g class="gp-leg gp-leg2"><rect x="114" y="290" width="22" height="70" rx="8" fill="#26222a"/><path d="M110 356 h32 q6 0 6 8 v4 h-42 q-2 -12 4 -12Z" fill="#311d11"/></g>
+    <g class="gp-body">
     <path d="M62 150 Q110 132 158 150 L172 306 Q110 318 48 306Z" fill="url(#gpCoat)"/><path d="M62 150 Q110 132 158 150 L172 306 Q110 318 48 306Z" fill="url(#gpTweed)"/>
     <path d="M110 150 V306" stroke="#2a1c12" stroke-width="3"/>${[180, 214, 248, 282].map((y) => `<circle cx="120" cy="${y}" r="5" fill="#c9a24a"/>`).join('')}
-    <path d="M58 160 Q34 210 44 262 L62 260 Q56 214 76 176Z" fill="#5c4230"/><circle cx="52" cy="266" r="11" fill="url(#gpSkin)"/>
+    <g class="gp-arm"><path d="M58 160 Q34 210 44 262 L62 260 Q56 214 76 176Z" fill="#5c4230"/><circle cx="52" cy="266" r="11" fill="url(#gpSkin)"/></g>
     <g class="gp-lantern"><path d="M162 160 Q186 206 182 246 L166 248 Q168 210 150 178Z" fill="#5c4230"/><circle cx="174" cy="252" r="11" fill="url(#gpSkin)"/>
       <circle cx="176" cy="300" r="70" fill="url(#gpGlow)" class="gp-glow"/>
-      <path d="M176 254 v12" stroke="#2a1c12" stroke-width="3"/><path d="M164 268 h24 l-4 8 h-16z" fill="#2b2b30"/>
-      <rect x="164" y="276" width="24" height="34" rx="4" fill="#ffcf6a" stroke="#2b2b30" stroke-width="4"/><path d="M176 280 q-5 10 0 20 q5 -10 0 -20Z" fill="#ff8a2a"/><rect x="161" y="310" width="30" height="7" rx="2" fill="#2b2b30"/></g>
+      <g class="gp-lamp"><path d="M176 254 v12" stroke="#2a1c12" stroke-width="3"/><path d="M164 268 h24 l-4 8 h-16z" fill="#2b2b30"/>
+      <rect x="164" y="276" width="24" height="34" rx="4" fill="#ffcf6a" stroke="#2b2b30" stroke-width="4"/><path d="M176 280 q-5 10 0 20 q5 -10 0 -20Z" fill="#ff8a2a"/><rect x="161" y="310" width="30" height="7" rx="2" fill="#2b2b30"/></g></g>
     <path d="M70 142 Q110 168 152 142 L158 162 Q110 184 64 162Z" fill="#2f8a57"/><path d="M128 160 l10 56 l-16 2 l-4 -54Z" fill="#287a4c"/>${[176, 190, 204].map((y) => `<path d="M124 ${y} h14" stroke="#d7263d" stroke-width="3"/>`).join('')}
     <g class="gp-head">
       <circle cx="110" cy="100" r="40" fill="url(#gpSkin)"/>
@@ -795,6 +795,7 @@
       <circle cx="84" cy="114" r="7" fill="#ff7b86" opacity=".35"/><circle cx="136" cy="114" r="7" fill="#ff7b86" opacity=".35"/>
       <path d="M68 78 Q72 50 110 48 Q150 50 154 78 Q160 82 166 80 Q160 92 110 86 Q64 88 68 78Z" fill="#5a4a3a"/><path d="M68 78 Q72 50 110 48 Q150 50 154 78 Q160 82 166 80 Q160 92 110 86 Q64 88 68 78Z" fill="url(#gpTweed)"/>
       <path d="M74 80 Q110 90 162 80" stroke="#3a2e22" stroke-width="3" fill="none"/>
+    </g>
     </g>
   </svg>`;
 

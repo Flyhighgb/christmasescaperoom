@@ -228,15 +228,16 @@
         <svg class="intro-over" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
           <g class="attic-glow"><circle cx="1110" cy="515" r="80" fill="url(#gWarm)"/><circle cx="1110" cy="515" r="20" fill="#ffcf6a" stroke="#4a2c22" stroke-width="5"/><path d="M1110 495 v40 M1090 515 h40" stroke="#4a2c22" stroke-width="4"/></g>
           <g class="steps">${Array.from({ length: 12 }, (_, i) => `<ellipse cx="${1060 - i * 78}" cy="${752 + (i % 2) * 8}" rx="9" ry="4" fill="#7286ad" style="transition-delay:${(i * 0.45).toFixed(2)}s"/>`).join('')}</g>
-          <g transform="translate(1100 752)"><g class="gp-walk"><g transform="scale(.45) translate(-110 -370)"><g class="gp-bob">${ART.grandpa.replace('<svg ', '<svg width="220" height="380" ')}</g></g></g></g>
+          <g transform="translate(1100 752)"><g class="gp-walk"><g transform="scale(.45) translate(-110 -370)"><g class="gp-bob walking">${ART.grandpa.replace('<svg ', '<svg width="220" height="380" ')}</g></g></g></g>
         </svg>
       </div>
-      <div class="intro-elsie">${ART.elsie}</div>
+      <div class="intro-elsie walking">${ART.elsie}</div>
       <div class="intro-text">${pages.map((p, i) => `<div class="page" data-i="${i}" style="${i ? 'display:none' : ''}">${p}</div>`).join('')}</div>
       <div class="controls"><div class="dots">${pages.map((_, i) => `<i data-i="${i}"></i>`).join('')}</div><button class="btn ghost small" id="skip">Skip</button><button class="btn gold small" id="next">Next</button></div></div>`;
     let i = 0, timer;
     const show = () => {
       $('.intro').dataset.p = i;
+      if (i === 3) setTimeout(() => { const e = $('.intro-elsie'); if (e) e.classList.add('stopped'); }, 2300);
       $$('.intro .page').forEach((el) => { el.style.display = +el.dataset.i === i ? '' : 'none'; el.classList.remove('on'); });
       $$('.intro .dots i').forEach((d) => d.classList.toggle('on', +d.dataset.i === i));
       requestAnimationFrame(() => requestAnimationFrame(() => { const el = $(`.intro .page[data-i="${i}"]`); if (el) el.classList.add('on'); }));
@@ -1126,7 +1127,7 @@
     if (screen === 'victory') return updateVictory();
     screen = 'victory';
     document.body.classList.remove('in-game');
-    const el = h(`<div class="victory"><canvas id="fw"></canvas><div class="v-grandpa">${ART.grandpa}</div><div class="card">
+    const el = h(`<div class="victory"><canvas id="fw"></canvas><div class="v-grandpa walking">${ART.grandpa}</div><div class="card">
       <div class="kicker">The Great Clock strikes midnight</div>
       <h1 class="title">Merry Christmas!</h1>
       <p class="tagline" style="margin-bottom:6px">You saved Christmas morning! Grandpa Tobias stamps the snow off his boots, sees the clock ticking, and laughs: "I knew you could do it, <i>together</i>."</p>
@@ -1137,6 +1138,7 @@
     $('#app').append(el);
     $('#again').onclick = () => { if (confirm('Reset the room so everyone can play again from the start?')) send({ t: 'reset' }); };
     fireworks($('#fw'));
+    setTimeout(() => { const gp = $('.v-grandpa'); if (gp) gp.classList.remove('walking'); }, 2300);
     updateVictory();
   }
   function updateVictory() {

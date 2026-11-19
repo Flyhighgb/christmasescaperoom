@@ -526,7 +526,7 @@ body.in-game #snow { opacity: 0; }
 .intro[data-p="1"] .attic-glow { opacity: 1; animation: lanternFlicker 1.6s ease-in-out infinite alternate; }
 .intro-elsie { position: absolute; left: 4vw; bottom: 0; width: min(200px, 26vw); height: auto; aspect-ratio: 220 / 360; transform: translateY(110%); transition: transform .9s cubic-bezier(.2,1.3,.4,1); filter: drop-shadow(0 10px 20px rgba(0,0,0,.5)); }
 .intro[data-p="3"] .intro-elsie, .intro[data-p="4"] .intro-elsie { transform: none; }
-.intro[data-p="3"] .intro-elsie .e-wave { animation: wave .7s ease-in-out infinite; }
+.intro-elsie.stopped .e-wave { animation: wave .7s ease-in-out infinite; }
 @media (max-height: 500px) { .intro-text { top: 12px; padding: 14px 20px; } .intro .page { font-size: 19px; } .intro .controls { bottom: 10px; } }
 
 /* victory: Grandpa comes home */
@@ -534,3 +534,30 @@ body.in-game #snow { opacity: 0; }
 .v-grandpa svg { width: 100%; height: 100%; }
 @keyframes gpArrive { from { transform: translateX(120%); } }
 @media (max-width: 760px) { .v-grandpa { display: none; } }
+
+/* ---------- walking: legs step, arms swing, body bobs ---------- */
+.gp-leg, .gp-arm, .gp-lamp, .gp-body, .e-leg, .e-body { transform-box: view-box; }
+.gp-leg1 { transform-origin: 95px 296px; } .gp-leg2 { transform-origin: 125px 296px; }
+.gp-arm { transform-origin: 66px 168px; } .gp-lamp { transform-origin: 176px 254px; } .gp-body { transform-origin: 110px 300px; }
+.e-leg1 { transform-origin: 94px 254px; } .e-leg2 { transform-origin: 126px 254px; }
+.walking .gp-leg1, .walking .e-leg1 { animation: stepA .7s ease-in-out infinite; }
+.walking .gp-leg2, .walking .e-leg2 { animation: stepB .7s ease-in-out infinite; }
+.walking .gp-arm { animation: armSwing .7s ease-in-out infinite; }
+.walking .gp-lamp { animation: lampSwing .7s ease-in-out infinite; }
+.walking .gp-body { animation: bodySway .7s ease-in-out infinite; }
+.walking .e-body { animation: bodySway .5s ease-in-out infinite !important; }
+.walking .e-leg1, .walking .e-leg2 { animation-duration: .5s; }
+/* a step: the foot lifts and swings forward, then plants */
+@keyframes stepA { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-12px) rotate(9deg); } 50% { transform: translateY(0) rotate(0); } }
+@keyframes stepB { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(0) rotate(0); } 75% { transform: translateY(-12px) rotate(-9deg); } }
+@keyframes armSwing { 0%, 100% { transform: rotate(10deg); } 50% { transform: rotate(-10deg); } }
+@keyframes lampSwing { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
+@keyframes bodySway { 0%, 50%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-2deg); } 75% { transform: translateY(-5px) rotate(2deg); } }
+/* the whole figure no longer glides: it bobs with each step instead */
+.intro .gp-bob { animation: none; }
+/* Elsie walks in from the side, then stops and waves */
+.intro-elsie { transform: translateX(-160%); transition: transform 2.2s linear; }
+.intro[data-p="3"] .intro-elsie, .intro[data-p="4"] .intro-elsie { transform: none; }
+.intro-elsie.stopped .e-leg1, .intro-elsie.stopped .e-leg2, .intro-elsie.stopped .e-body { animation: none !important; }
+@keyframes gpArrive { from { transform: translateX(130%); } }
+.v-grandpa { animation: gpArrive 2.2s .2s linear backwards; }
