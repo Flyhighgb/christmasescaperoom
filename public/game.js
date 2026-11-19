@@ -21,8 +21,11 @@
   const TOYS = ['horse', 'drum', 'kite', 'teddy'];
   const ELVES = ['Pip', 'Bramble', 'Tansy', 'Juniper'];
   const SCENES = { parlour: 'The Parlour', workshop: "Grandpa's Workshop", attic: 'The Clock Tower' };
-  const VIEW_NAMES = { present: 'the present', letter: 'the letter', door: 'the door', bells: 'the bells', tiles: 'the painting', ledger: 'the ledger', cabinet: 'the cabinet', gears: 'the clock mechanism', wheel: 'the cipher wheel', final: 'the plaque', telescope: 'the telescope' };
-  const GAME_MS = 60 * 60 * 1000;
+  const VIEW_NAMES = { cards: 'the Christmas cards', album: 'the photo album', watch: 'the pocket watch', pocket: 'their pocket', present: 'the present', letter: 'the letter', door: 'the door', bells: 'the bells', tiles: 'the painting', ledger: 'the ledger', cabinet: 'the cabinet', gears: 'the clock mechanism', wheel: 'the cipher wheel', final: 'the plaque', telescope: 'the telescope' };
+  const GAME_MS = 90 * 60 * 1000;
+  const SOLVE_TEXT = { present: 'The present is open!', memory: 'All the pairs are matched!', door: 'The workshop door is open!', bells: "That's Grandpa's tune!", tiles: 'The painting is fixed!', spot: 'All five differences found!', cabinet: 'The cabinet is open!', hatch: 'The attic hatch is open!', watch: 'The watch clicks open!', gears: 'The Great Clock is ticking!', final: 'Midnight!' };
+  const PRAISE = ['Brilliant!', 'You did it!', 'Grandpa would be so proud!', 'Amazing teamwork!', 'Ooh, clever!', 'Yes! Well done!'];
+  const OOPS = ["Hmm, not quite. Have another think!", "Nearly! Try again.", "Oops! That's not it. Keep going!"];
 
   // ---------- local state ----------
   let pid = store.get('mw-pid', '');
@@ -170,8 +173,8 @@
           <div class="players" id="lobbyPlayers"></div>
           <div class="tips">
             <div class="tip"><b>🗣️</b>Talk to each other! Some clues are only on <i>your</i> screen.</div>
-            <div class="tip"><b>🐦</b>Stuck? Robin the hint bird is always happy to help.</div>
-            <div class="tip"><b>⏳</b>You have 60 minutes before midnight. No rush, it's Christmas!</div>
+            <div class="tip"><b>🧝</b>Elsie the elf will tell you what to do, and gives hints if you get stuck.</div>
+            <div class="tip"><b>⏳</b>You have 90 minutes before midnight. No rush, it's Christmas!</div>
           </div>
           <button class="btn" id="begin" style="width:100%;font-size:20px;padding:18px">Begin the adventure</button>
           <p class="fineprint">Wait until everyone's here, then anyone can press Begin.</p>
@@ -193,6 +196,7 @@
       'Christmas Eve. <em>11:59 pm.</em><br>Snow has buried Grandpa Tobias\'s cottage right up to the windowsills.',
       'High in the attic stands the <em>Great Clock</em>, the old toymaker\'s masterpiece. Every year it strikes midnight, and Christmas morning arrives.',
       'But tonight, the clock has <em>stopped</em>. Grandpa has gone out into the snow for help, leaving behind a letter… and a house full of puzzles.',
+      'His apprentice, <em>Elsie the elf</em>, is waiting inside to help you. Listen to her when you\'re not sure what to do!',
       'Work together. Share everything you find.<br>Restart the Great Clock, and <em>save Christmas!</em>',
     ];
     $('#app').innerHTML = `<div class="intro">
@@ -244,6 +248,9 @@
           <div class="scene-name" id="sceneName"></div>
           <div class="modal-layer" id="modalLayer"></div>
           <div id="fxLayer" style="position:absolute;inset:0;pointer-events:none;z-index:42"></div>
+          <div class="elsie" id="elsie" title="Elsie">${ART.elsie}</div>
+          <div class="bubble" id="bubble" hidden><b>Elsie</b><p id="bubbleText"></p><button class="bubble-x" aria-label="Hide">×</button></div>
+          <div class="verdict" id="verdict" hidden></div>
           <div class="cursors" id="cursors"></div>
           <div class="tooltip" id="tip"></div>
         </div>
@@ -253,9 +260,9 @@
         <button class="pocket-btn" id="pocketBtn" hidden title="Your torn melody pieces"><span class="lbl">Pocket</span><span class="scrapmini">🎼</span></button>
         <div class="feed" id="feed"></div>
         <div class="emojis" title="Point things out to everyone">${['👀', '💡', '❓', '🎉', '❤️'].map((e) => `<button data-e="${e}">${e}</button>`).join('')}</div>
-        <button class="robin-btn" id="btnHint">${ART.robin}<span>Ask Robin</span></button>
+        <button class="robin-btn" id="btnHint">${elsieFace()}<span>Ask Elsie for a hint</span></button>
       </footer>
-      <aside class="panel" id="hintPanel"><header>${ART.robin}<h4>Robin's hints</h4><button class="icon-btn" data-close>×</button></header><div class="body" id="hintBody"></div></aside>
+      <aside class="panel" id="hintPanel"><header>${elsieFace()}<h4>Elsie's hints</h4><button class="icon-btn" data-close>×</button></header><div class="body" id="hintBody"></div></aside>
       <aside class="panel" id="chatPanel"><header><h4>Chat</h4><button class="icon-btn" data-close>×</button></header><div class="body"><div class="chatlog" id="chatLog"></div></div>
         <form class="chatform" id="chatForm"><input class="field" id="chatIn" maxlength="200" placeholder="Say something…" autocomplete="off"><button class="btn gold small">Send</button></form></aside>
     </div>`;
@@ -277,6 +284,7 @@
     const toStage = (e) => { const r = stage.getBoundingClientRect(); return { x: (e.clientX - r.left) / k, y: (e.clientY - r.top) / k }; };
     stage.addEventListener('pointermove', (e) => {
       const p = toStage(e); myCur.x = p.x; myCur.y = p.y;
+      stage.style.setProperty('--px', ((p.x / 1600 - 0.5) * 2).toFixed(3)); stage.style.setProperty('--py', ((p.y / 900 - 0.5) * 2).toFixed(3));
       const now = performance.now();
       if (now - lastSent > 45) { lastSent = now; send({ t: 'cur', x: Math.round(p.x), y: Math.round(p.y), s: scene }); }
       const hsEl = e.target.closest && e.target.closest('.hs');
@@ -312,6 +320,8 @@
       if (idx >= 0) send({ t: 'ping', x: Math.round(myCur.x), y: Math.round(myCur.y), s: scene, e: ['👀', '💡', '❓', '🎉', '❤️'][idx] });
     });
 
+    $('#elsie').onclick = () => { SFX.pop(); const b = $('#bubble'); if (!b.hidden) b.hidden = true; else { elsieBusyUntil = 0; elsieLast = ''; updateElsie(); } };
+    $('.bubble-x').onclick = () => { $('#bubble').hidden = true; };
     goScene(scene, true);
     sendWhere();
     requestAnimationFrame(cursorLoop);
@@ -325,6 +335,7 @@
     const nm = $('#sceneName'); nm.textContent = SCENES[s]; nm.classList.add('show'); clearTimeout(nm._t); nm._t = setTimeout(() => nm.classList.remove('show'), 2200);
     $('#sceneLabel').textContent = SCENES[s];
     if (changed && !silent) { SFX.whoosh(); sendWhere(); }
+    if (changed) { elsieLast = ''; setTimeout(updateElsie, 700); }
     for (const [id, c] of cursors) c.el.style.display = c.s === scene ? '' : 'none';
   }
 
@@ -353,7 +364,7 @@
     // satchel
     const slots = $('#slots'); const prev = slots.dataset.items || '';
     const items = g.inv.slice();
-    slots.innerHTML = [0, 1, 2, 3].map((i) => items[i] ? `<div class="slot ${prev.split(',').includes(items[i]) ? '' : 'new'}" data-name="${ART.itemName[items[i]]}">${ART.icon[items[i]]}</div>` : '<div class="slot"></div>').join('');
+    slots.innerHTML = Array.from({ length: Math.max(4, items.length) }, (_, i) => i).map((i) => items[i] ? `<div class="slot ${prev.split(',').includes(items[i]) ? '' : 'new'}" data-name="${ART.itemName[items[i]]}">${ART.icon[items[i]]}</div>` : '<div class="slot"></div>').join('');
     slots.dataset.items = items.join(',');
 
     // pocket
@@ -369,6 +380,7 @@
     if ($('#hintPanel').classList.contains('on')) renderHints();
     renderChat();
     tickTimer();
+    updateElsie();
     if (S.finishedAt && !finaleRunning && screen === 'game') { if (Date.now() + skew - S.finishedAt < 10000) runFinale(); else showVictory(); }
   }
 
@@ -392,10 +404,12 @@
     // attic
     $('#aGear0').style.display = g.pz.gears[0] ? '' : 'none';
     $('#aGear1').style.display = g.pz.gears[1] ? '' : 'none';
+    $('#aGear2').style.display = g.pz.gears[2] ? '' : 'none';
+    $('#aSlot2').style.display = g.pz.gears[2] ? 'none' : '';
     $('#aSlot0').style.display = g.pz.gears[0] ? 'none' : '';
     $('#aSlot1').style.display = g.pz.gears[1] ? 'none' : '';
     $('[data-scene="attic"]').classList.toggle('ticking', !!g.solved.gears);
-    $('[data-hs="gears"]').classList.toggle('nudge', (has('brassGear') || has('silverGear')) && scene === 'attic');
+    $('[data-hs="gears"]').classList.toggle('nudge', (has('brassGear') || has('silverGear') || has('copperGear')) && scene === 'attic');
     if (g.solved.final) { $('#aHour').style.transform = 'rotate(0deg)'; $('#aMin').style.transform = 'rotate(0deg)'; }
     else { $('#aHour').style.transform = 'rotate(-0.5deg)'; $('#aMin').style.transform = 'rotate(-6deg)'; }
   }
@@ -455,10 +469,13 @@
     if (screen !== 'game') { if (m.fx === 'reset') { screen = null; route(); } return; }
     switch (m.fx) {
       case 'solve': {
-        SFX.chime();
+        SFX.correct(); setTimeout(SFX.chime, 300);
         sparkles(800, 420, 40);
         const who = m.by === pid ? 'You' : (playerById(m.by) || {}).name || 'Someone';
-        if (m.p !== 'final' && m.p !== 'hatch') toast(`✨ ${who} solved ${puzzleTitle(m.p).toLowerCase()}!`, 'win');
+        if (m.p !== 'final') {
+          verdict(true, SOLVE_TEXT[m.p] || 'Correct!', `${who === 'You' ? 'You' : who} solved ${puzzleTitle(m.p).toLowerCase()}${m.reward ? ` and found: ${ART.itemName[m.reward]}` : ''}`);
+          elsieReact(PRAISE[Math.floor(Math.random() * PRAISE.length)] + (m.reward ? ` We found the ${ART.itemName[m.reward].toLowerCase()}!` : ''));
+        }
         if (m.p === 'final') runFinale();
         if (m.p === 'door') setTimeout(() => { if (scene === 'parlour' && !view) toast('The door to the workshop is open. Click it to go through!'); }, 1200);
         if (m.p === 'hatch') setTimeout(() => toast('The attic hatch is open. Climb the ladder!'), 900);
@@ -466,12 +483,18 @@
       }
       case 'wrong': {
         SFX.wrong();
+        if (m.by === pid) { verdict(false, 'Not quite!', m.msg || 'Try again'); elsieReact(OOPS[Math.floor(Math.random() * OOPS.length)]); }
+        else toast(`${(playerById(m.by) || {}).name || 'Someone'} tried ${puzzleTitle(m.p).toLowerCase()}: ${m.msg || 'not quite'}`);
         const md = $('#modalLayer .modal');
         if (md && view === m.p) { md.classList.remove('shake'); void md.offsetWidth; md.classList.add('shake'); }
         break;
       }
       case 'bell': if (m.by !== pid) { SFX.bell(m.c); ringSceneBell(m.c); } break;
-      case 'gear': SFX.tick(); setTimeout(SFX.tick, 200); break;
+      case 'gear': SFX.tick(); setTimeout(SFX.tick, 200); if (!solved('gears')) verdict(true, 'Gear fitted!', `${['Brass', 'Silver', 'Copper'][m.i]} gear in place`); break;
+      case 'flip': if (m.by !== pid) SFX.flip(); break;
+      case 'pair': SFX.correct(); sparkles(800, 450, 14); break;
+      case 'nopair': setTimeout(SFX.flip, 900); break;
+      case 'spotted': SFX.correct(); if (!solved('spot')) verdict(true, 'Spotted one!', `${S.game.pz.spot.filter(Boolean).length} of 5 differences found`); break;
       case 'ping': {
         if (m.s !== scene) return;
         const p = playerById(m.by) || { color: '#fff' };
@@ -479,10 +502,64 @@
         $('#fxLayer').append(el); setTimeout(() => el.remove(), 1900); SFX.pop();
         break;
       }
-      case 'hint': SFX.pop(); if (m.by !== pid) toast(`🐦 ${(playerById(m.by) || {}).name || 'Someone'} got a hint from Robin about ${puzzleTitle(m.p).toLowerCase()}.`); if ($('#hintPanel').classList.contains('on')) renderHints(); break;
+      case 'hint': SFX.pop(); if (m.by !== pid) toast(`🧝 ${(playerById(m.by) || {}).name || 'Someone'} got a hint from Elsie about ${puzzleTitle(m.p).toLowerCase()}.`); if ($('#hintPanel').classList.contains('on')) renderHints(); break;
       case 'chat': if (m.by !== pid && !$('#chatPanel').classList.contains('on')) { unread++; SFX.pop(); const b = $('#chatBadge'); b.hidden = false; b.textContent = unread; } break;
       case 'reset': screen = null; route(); break;
     }
+  }
+
+  // ---------- big feedback stamp ----------
+  function verdict(ok, title, sub) {
+    const v = $('#verdict'); if (!v) return;
+    v.className = 'verdict ' + (ok ? 'ok' : 'no');
+    v.innerHTML = `<div class="vbadge">${ok ? '✓' : '✗'}</div><div class="vtext"><b>${esc(title)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>`;
+    v.hidden = false; void v.offsetWidth; v.classList.add('show');
+    if (ok) sparkles(800, 380, 30);
+    clearTimeout(v._t); v._t = setTimeout(() => { v.classList.remove('show'); setTimeout(() => { v.hidden = true; }, 400); }, ok ? 2400 : 2000);
+  }
+
+  // ---------- Elsie, the guide ----------
+  function elsieFace() { return ART.elsie.replace('viewBox="0 0 220 360"', 'viewBox="44 14 132 132"').replace(/id="e(\w+)"/g, 'id="f$1"').replace(/url\(#e(\w+)\)/g, 'url(#f$1)'); }
+  let elsieLast = '', elsieTyping = null, elsieHideT = null, elsieBusyUntil = 0;
+  function elsieSay(text, ms = 14000) {
+    const b = $('#bubble'), p = $('#bubbleText'), el = $('#elsie'); if (!b) return;
+    b.hidden = !!view; p.textContent = '';
+    clearInterval(elsieTyping); clearTimeout(elsieHideT);
+    el.classList.add('talking');
+    let i = 0;
+    elsieTyping = setInterval(() => { i += 2; p.textContent = text.slice(0, i); if (i >= text.length) { clearInterval(elsieTyping); el.classList.remove('talking'); } }, 28);
+    elsieHideT = setTimeout(() => { b.hidden = true; }, ms);
+  }
+  function elsieReact(text) { elsieBusyUntil = Date.now() + 4000; elsieSay(text, 4000); setTimeout(() => { elsieLast = ''; updateElsie(); }, 4200); }
+  function objective() {
+    const g = S.game, sv = (p) => !!g.solved[p];
+    if (scene === 'parlour') {
+      if (!sv('present') && !sv('memory')) return "Hi, I'm Elsie! Grandpa's locked everything up. Let's start with the present under the tree. Its tag has coloured dots… and look at all those Christmas cards on the mantelpiece!";
+      if (!sv('present')) return 'The present under the tree has a number lock. Look at the coloured dots on the tag, then count the baubles on the tree!';
+      if (!sv('memory')) return 'Grandpa hid something behind his Christmas cards on the mantelpiece. Turn them over and find all the matching pairs!';
+      if (!sv('door')) return has('doorKey') ? "We've got the key! Now read Grandpa's letter on the desk through the red lens to find the secret word for the door." : "Read Grandpa's letter on the desk. Try looking at it through that red lens!";
+      return 'The workshop door is open! Come on, through the door on the right!';
+    }
+    if (scene === 'workshop') {
+      if (!sv('bells')) return "This is Grandpa's workshop! His bell melody was torn up and shared between you. Check your pocket, read your pieces out loud, and ring the bells in order.";
+      if (!sv('tiles')) return "Someone's scrambled Grandpa's painting! Turn the squares until the picture's right, and remember what it shows.";
+      if (!sv('spot')) return "Grandpa's photo album is on the workbench. Two photos, five differences. Can you spot them all?";
+      if (!sv('cabinet')) return "The elves' ledger on the workbench says who made which toy. Work it out together, then set the dials on the toy cabinet.";
+      if (!sv('hatch')) return 'That little star key must fit the hatch in the ceiling! Click the ladder to climb up.';
+      return 'The hatch is open! Climb the ladder up to the clock tower!';
+    }
+    if (scene === 'attic') {
+      if (!sv('watch')) return "The Great Clock! It's missing three gears. Grandpa's pocket watch on the side table might hold one. He always set it by the village clock in his painting.";
+      if (!sv('gears')) return 'We need all three gears: brass, silver and copper. Open the glass case under the clock and fit them in!';
+      if (!sv('final')) return "It's ticking! Now the plaque needs a secret word. Use the cipher wheel to decode it. Remember the banner in the painting?";
+      return 'You did it! Merry Christmas!';
+    }
+    return '';
+  }
+  function updateElsie() {
+    if (screen !== 'game' || Date.now() < elsieBusyUntil) return;
+    const o = objective();
+    if (o && o !== elsieLast) { elsieLast = o; elsieSay(o); }
   }
 
   // ---------- hints & chat ----------
@@ -514,6 +591,7 @@
     const M = MODALS[id]; if (!M) return;
     view = id;
     $('#tip').classList.remove('show');
+    if ($('#bubble')) $('#bubble').hidden = true;
     const layer = $('#modalLayer');
     layer.innerHTML = '';
     const el = h(`<div class="modal" data-m="${id}"><button class="close" aria-label="Close">×</button><h3>${M.title}</h3><div class="mbody">${M.build()}</div></div>`);
@@ -640,10 +718,13 @@
           $('#goWs', col).onclick = () => { closeModal(); goScene('workshop'); };
           return;
         }
-        if (col.dataset.state === 'lock') return; col.dataset.state = 'lock';
-        col.innerHTML = `<p class="lede">A heavy oak door with a brass lock of eight letter tiles. Carved into the wood are the words: <i>"Only my favourite spice may enter."</i></p>${wordHtml(8)}<button class="btn gold" id="tryDoor">Speak the word</button>`;
-        const get = wordInputs(col, 8, (w) => act({ a: 'door', word: w }));
-        $('#tryDoor', col).onclick = () => act({ a: 'door', word: get() });
+        if (col.dataset.state !== 'lock') {
+          col.dataset.state = 'lock';
+          col.innerHTML = `<p class="lede">A heavy oak door with <b>two locks</b>: a keyhole, and a brass lock of eight letter tiles. Carved into the wood: <i>"Only my favourite spice may enter."</i></p><div class="keystate" id="keyState"></div>${wordHtml(8)}<button class="btn gold" id="tryDoor">Turn the key and speak the word</button>`;
+          const get = wordInputs(col, 8, (w) => act({ a: 'door', word: w }));
+          $('#tryDoor', col).onclick = () => act({ a: 'door', word: get() });
+        }
+        $('#keyState', col).innerHTML = has('doorKey') ? `${ART.icon.doorKey}<span>The brass door key from your satchel fits the keyhole!</span>` : `<span class="lockicon">🔒</span><span>Keyhole: locked. You need a key.</span>`;
       },
     },
 
@@ -661,15 +742,17 @@
           </g>
         </svg>
         <div class="side">
-          <div class="staff"><h4>Melody so far</h4><div class="notes" id="seq"></div></div>
+          <div class="staff"><h4>Melody so far</h4><div class="notes" id="seq"></div><button class="btn ghost small" id="clearBells" style="margin-top:10px;color:#7a1222;box-shadow:inset 0 0 0 1.5px #c9b48c">Start again</button></div>
           <div class="pieces" id="myPieces"></div>
         </div></div>`,
       bind(el) {
         $$('.bellhit', el).forEach((b) => (b.onclick = () => { const c = b.dataset.c; SFX.bell(c); ringSceneBell(c); act({ a: 'bell', c }); }));
+        $('#clearBells', el).onclick = () => { SFX.click(); act({ a: 'clearBells' }); };
       },
       update(el) {
         const g = S.game;
-        $('#seq', el).innerHTML = g.solved.bells ? '<b style="color:#1f7a4f">♪ The melody is complete!</b>' : (g.pz.bellSeq.length ? g.pz.bellSeq.map((c) => `<div class="note" style="background:${HEX[c]}"></div>`).join('') : '<span style="opacity:.6">Ring a bell…</span>');
+        $('#seq', el).innerHTML = g.solved.bells ? '<b style="color:#1f7a4f">♪ The melody is complete!</b>' : (g.pz.bellSeq.length ? g.pz.bellSeq.map((c) => `<div class="note" style="background:${HEX[c]}"></div>`).join('') + `<span style="opacity:.6;margin-left:6px">${g.pz.bellSeq.length} / 8</span>` : '<span style="opacity:.6">Ring 8 bells…</span>');
+        $('#clearBells', el).hidden = !!g.solved.bells;
         $('#mbLid', el).classList.toggle('open', !!g.solved.bells);
         $('#mbGear', el).style.display = g.solved.bells ? '' : 'none';
         $('#myPieces', el).innerHTML = g.solved.bells ? foundBox('brassGear', 'The music box opened! Inside was <b>a brass gear</b>.') : piecesHtml();
@@ -696,8 +779,8 @@
         const done = solved('tiles');
         $('#tiles', el).classList.toggle('done', done);
         const col = $('#tilesCol', el);
-        if (done) { if (col.dataset.state !== 'done') { col.dataset.state = 'done'; col.innerHTML = `${banner('The picture is whole again!')}<p class="lede" style="margin-top:18px">The painting swings open on a hidden hinge. Remember what the banner says!</p>${foundBox('silverGear', 'Behind it, tucked in the wall: <b>a little silver gear</b>.')}`; } }
-        else if (col.dataset.state !== 'play') { col.dataset.state = 'play'; col.innerHTML = '<p class="lede">Someone has twisted the squares of Grandpa\'s favourite painting. Click a square to turn it. Everyone can help at once!</p><p class="muted">Tip: look for the moon, the snowy ground and the banner at the bottom.</p>'; }
+        if (done) { if (col.dataset.state !== 'done') { col.dataset.state = 'done'; col.innerHTML = `${banner('The picture is whole again!')}<p class="lede" style="margin-top:18px">Grandpa's painting of the village on Christmas Eve. Two things to remember: <b>what the banner says</b>, and <b>the time on the village clock</b>.</p>`; } }
+        else if (col.dataset.state !== 'play') { col.dataset.state = 'play'; col.innerHTML = '<p class="lede">Someone has twisted the squares of Grandpa\'s favourite painting. Click a square to turn it. Everyone can help at once!</p><p class="muted">Tip: look for the moon, the bunting, the snowman and the banner at the bottom.</p>'; }
       },
     },
 
@@ -746,20 +829,82 @@
       title: 'The clock mechanism',
       build: () => `<div class="mrow"><svg viewBox="0 0 640 420" style="width:640px;flex:none" id="mechSvg">
           <rect x="0" y="0" width="640" height="420" rx="18" fill="#0f1422"/><rect x="0" y="0" width="640" height="420" rx="18" fill="url(#gCool)" opacity=".15"/>
-          <g transform="translate(140 220)"><g class="spin-slow mech" style="animation-duration:14s">${ART.gear(90, 18, 'url(#gBrass)')}</g></g>
-          <g transform="translate(540 120)"><g class="spin-slow mech-r" style="animation-duration:8s">${ART.gear(44, 10, 'url(#gBrass)')}</g></g>
-          <g class="slot" data-i="0" style="cursor:pointer"><circle cx="318" cy="200" r="90" fill="#ffffff08" stroke="#ffffff40" stroke-width="3" stroke-dasharray="10 8"/><circle cx="318" cy="200" r="14" fill="#666"/><text x="318" y="320" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="20" fill="#a9b6d3" class="slotlbl">Large spindle</text>
-            <g class="placed" style="display:none" transform="translate(318 200)"><g class="spin-slow mech-r" style="animation-duration:10s">${ART.gear(72, 15, 'url(#gBrass)')}</g></g></g>
-          <g class="slot" data-i="1" style="cursor:pointer"><circle cx="470" cy="290" r="58" fill="#ffffff08" stroke="#ffffff40" stroke-width="3" stroke-dasharray="8 7"/><circle cx="470" cy="290" r="10" fill="#666"/><text x="470" y="380" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="20" fill="#a9b6d3" class="slotlbl">Small spindle</text>
-            <g class="placed" style="display:none" transform="translate(470 290)"><g class="spin-slow mech" style="animation-duration:6s">${ART.gear(44, 10, 'url(#gSilver)')}</g></g></g>
+          <g transform="translate(110 250)"><g class="spin-slow mech" style="animation-duration:14s">${ART.gear(80, 16, 'url(#gBrass)')}</g></g>
+          ${[[290, 170, 78, 'Large spindle', 'url(#gBrass)', 15], [452, 258, 56, 'Middle spindle', 'url(#gSilver)', 11], [566, 128, 42, 'Small spindle', 'url(#gCopper)', 9]].map(([x, y, r, lbl, fill, teeth], i) => `
+          <g class="slot" data-i="${i}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="${r + 14}" fill="#ffffff08" stroke="#ffffff40" stroke-width="3" stroke-dasharray="10 8"/><circle cx="${x}" cy="${y}" r="10" fill="#666"/><text x="${x}" y="${y + r + 46}" text-anchor="middle" font-family="Nunito" font-weight="800" font-size="19" fill="#a9b6d3" class="slotlbl">${lbl}</text>
+            <g class="placed" style="display:none" transform="translate(${x} ${y})"><g class="spin-slow ${i % 2 ? 'mech' : 'mech-r'}" style="animation-duration:${8 - i * 2}s">${ART.gear(r * 0.8, teeth, fill)}</g></g></g>`).join('')}
         </svg><div class="mcol" id="mechCol"></div></div>`,
       bind(el) { $$('#mechSvg .slot', el).forEach((s) => (s.onclick = () => act({ a: 'gear', i: +s.dataset.i }))); },
       update(el) {
         const g = S.game;
         $$('#mechSvg .slot', el).forEach((s, i) => { $('.placed', s).style.display = g.pz.gears[i] ? '' : 'none'; $('.slotlbl', s).style.display = g.pz.gears[i] ? 'none' : ''; });
         $('#mechSvg', el).classList.toggle('ticking', !!g.solved.gears);
+        const left = 3 - g.pz.gears.filter(Boolean).length;
         $('#mechCol', el).innerHTML = g.solved.gears ? `${banner('Tick… tock… tick… tock!')}<p class="lede" style="margin-top:18px">The Great Clock shudders back to life! But its hands won't move to midnight until someone speaks the word on the brass plaque.</p>`
-          : `<p class="lede">Behind the glass, Grandpa's clockwork is still. Two spindles stand empty.</p><p class="muted">${has('brassGear') || has('silverGear') ? 'Click an empty spindle to fit a gear from your satchel.' : 'You need to find the gears that go here.'}</p>`;
+          : `<p class="lede">Behind the glass, Grandpa's clockwork is still. ${left === 1 ? 'One spindle stands' : `${left} spindles stand`} empty: brass, silver and copper.</p><p class="muted">${has('brassGear') || has('silverGear') || has('copperGear') ? 'Click an empty spindle to fit a gear from your satchel.' : 'You need to find the gears that go here.'}</p>`;
+      },
+    },
+
+    cards: {
+      title: 'The Christmas cards',
+      build: () => `<div class="mrow" style="align-items:flex-start"><div class="cards" id="cards">${Array.from({ length: 16 }, (_, i) => `<button class="card" data-i="${i}" aria-label="Card ${i + 1}"><span class="cin"><span class="cback"></span><span class="cface"><svg viewBox="0 0 100 100"></svg></span></span></button>`).join('')}</div>
+        <div class="mcol" id="cardsCol"></div></div>`,
+      bind(el) { $$('#cards .card', el).forEach((b) => (b.onclick = () => { SFX.flip(); act({ a: 'card', i: +b.dataset.i }); })); },
+      update(el) {
+        const mem = S.game.pz.mem;
+        $$('#cards .card', el).forEach((b, i) => {
+          const up = mem.up.includes(i) || mem.done.includes(i);
+          b.classList.toggle('up', up); b.classList.toggle('done', mem.done.includes(i));
+          const face = $('.cface svg', b); const want = up ? mem.deck[i] : '';
+          if (face.dataset.icon !== want) { face.dataset.icon = want; if (want) face.innerHTML = ART.card[want]; }
+        });
+        const col = $('#cardsCol', el);
+        const pairs = mem.done.length / 2;
+        if (solved('memory')) { if (col.dataset.state !== 'done') { col.dataset.state = 'done'; col.innerHTML = `${banner('All eight pairs!')}${foundBox('doorKey', 'Behind the last card hangs <b>a brass door key</b>. It must fit the workshop door!')}`; } }
+        else { col.dataset.state = 'play'; col.innerHTML = `<p class="lede">Grandpa's Christmas cards, all face down. Turn over two at a time to find matching pairs. Everyone can play!</p><p class="pairs"><b>${pairs}</b> of 8 pairs found</p>`; }
+      },
+    },
+
+    album: {
+      title: "Grandpa's photo album",
+      build: () => `<p class="lede" style="margin-bottom:14px">Two photos of the cottage from two different Christmases. They look the same… but there are <b>5 differences</b>. Click on a difference in either photo.</p>
+        <div class="album"><svg class="photo" id="phA" viewBox="0 0 440 320">${ART.photo(false)}<g class="marks"></g></svg><svg class="photo" id="phB" viewBox="0 0 440 320">${ART.photo(true)}<g class="marks"></g></svg></div>
+        <div id="albumCol" style="margin-top:16px"></div>`,
+      bind(el) {
+        $$('.photo', el).forEach((svg) => svg.addEventListener('click', (e) => {
+          if (solved('spot')) return;
+          const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+          const hit = ART.SPOTS.findIndex(([x, y, r]) => Math.hypot(p.x - x, p.y - y) <= r);
+          if (hit >= 0 && !S.game.pz.spot[hit]) act({ a: 'spot', i: hit });
+          else if (hit < 0) { SFX.click(); const miss = document.createElementNS('http://www.w3.org/2000/svg', 'text'); miss.setAttribute('x', p.x); miss.setAttribute('y', p.y + 10); miss.setAttribute('class', 'miss'); miss.textContent = '✗'; $('.marks', svg).append(miss); setTimeout(() => miss.remove(), 700); }
+        }));
+      },
+      update(el) {
+        const found = S.game.pz.spot;
+        $$('.photo .marks', el).forEach((g) => { g.querySelectorAll('.ring').forEach((r) => r.remove()); found.forEach((f, i) => { if (!f) return; const [x, y, r] = ART.SPOTS[i]; g.insertAdjacentHTML('beforeend', `<circle class="ring" cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#2fae6b" stroke-width="5"/>`); }); });
+        const n = found.filter(Boolean).length;
+        const col = $('#albumCol', el);
+        col.innerHTML = solved('spot') ? `<div class="mrow">${banner('All five found!')}${foundBox('silverGear', 'A <b>silver gear</b> slides out of the album\'s spine!')}</div>` : `<p class="pairs"><b>${n}</b> of 5 differences found</p>`;
+      },
+    },
+
+    watch: {
+      title: "Grandpa's pocket watch",
+      build: () => `<div class="mrow"><svg viewBox="-200 -230 400 440" style="width:430px;flex:none" id="watchSvg"></svg>
+        <div class="mcol" id="watchCol"></div></div>`,
+      update(el) {
+        const w = S.game.pz.watch;
+        $('#watchSvg', el).innerHTML = ART.watch(w.h, w.m);
+        const col = $('#watchCol', el);
+        if (solved('watch')) { if (col.dataset.state !== 'done') { col.dataset.state = 'done'; col.innerHTML = `${banner('Click! The lid springs open.')}${foundBox('copperGear', 'Inside the watch: <b>a copper gear</b>!')}`; } return; }
+        if (col.dataset.state === 'play') return;
+        col.dataset.state = 'play';
+        col.innerHTML = `<p class="lede">Grandpa's gold pocket watch, stopped. Engraved on the back: <i>"Set me by the village clock, and I'll open for you."</i></p>
+          <div class="watchctl"><div><span>Hour hand</span><button class="btn ghost small" data-w="watchH" data-d="-1">◀</button><button class="btn ghost small" data-w="watchH" data-d="1">▶</button></div>
+          <div><span>Minute hand</span><button class="btn ghost small" data-w="watchM" data-d="-1">◀</button><button class="btn ghost small" data-w="watchM" data-d="1">▶</button></div></div>
+          <button class="btn gold" id="openWatch">Open the watch</button>`;
+        $$('[data-w]', col).forEach((b) => (b.onclick = () => { SFX.tick(); act({ a: b.dataset.w, d: +b.dataset.d }); }));
+        $('#openWatch', col).onclick = () => act({ a: 'openWatch' });
       },
     },
 
@@ -874,7 +1019,7 @@
     const hints = Object.values(S.game.hints).reduce((a, b) => a + b, 0);
     const t = S.finishedAt - S.startedAt;
     const vs = $('#vstats'); if (!vs) return;
-    vs.innerHTML = `<div class="stat"><b>${fmt(t)}</b><span>Escape time</span></div><div class="stat"><b>${hints}</b><span>Hints from Robin</span></div><div class="stat"><b>${t < GAME_MS ? fmt(GAME_MS - t) : '0:00'}</b><span>To spare</span></div>`;
+    vs.innerHTML = `<div class="stat"><b>${fmt(t)}</b><span>Escape time</span></div><div class="stat"><b>${hints}</b><span>Hints from Elsie</span></div><div class="stat"><b>${t < GAME_MS ? fmt(GAME_MS - t) : '0:00'}</b><span>To spare</span></div>`;
     $('#vplayers').innerHTML = S.players.slice().sort((a, b) => a.order - b.order).map((p) => `<div class="pchip">${avatar(p)}${esc(p.name)}</div>`).join('');
   }
   function fireworks(c) {

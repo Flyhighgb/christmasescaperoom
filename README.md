@@ -5,8 +5,8 @@ An original, cooperative, multiplayer Christmas escape room that runs in the bro
 > Christmas Eve, 11:59 pm. Grandpa Tobias's Great Clock has stopped, and without it Christmas morning can never arrive. Work together through his snowed-in cottage, solve his puzzles, and restart the clock before midnight.
 
 - **Players:** 1 to 12, each on their own device (laptop or tablet is best; phones work in landscape).
-- **Ages:** 8+ with adults. Robin the hint bird gives up to three hints per puzzle, the last one being the answer.
-- **Length:** about 30 to 60 minutes. The 60-minute timer keeps counting as "overtime" if you go past it, so nobody loses.
+- **Ages:** 8+ with adults. Elsie the elf stands in each room, tells you what to do next, cheers when you get something right and gives up to three hints per puzzle (the last one is the answer).
+- **Length:** 11 puzzles across 3 rooms, about 45 to 90 minutes. The 90-minute timer keeps counting as "overtime" if you go past it, so nobody loses.
 - **Multiplayer:** one person creates a room and shares the 4-letter code or link. Everyone sees the same puzzles, live cursors, emoji pings, the shared satchel, chat and hints. The bell puzzle splits its clues between players, so people have to talk to each other.
 
 ## Play it on your own computer (2 minutes)
@@ -46,4 +46,4 @@ The host should **not** read `SOLUTIONS.md` if they want to play too!
 
 - `server.js`: web + WebSocket server, rooms and room codes.
 - `puzzles.js`: puzzle rules, answers and hints (checked on the server).
-- `public/`: the game itself: `art.js` (all illustrations, hand-built SVG), `game.js` (gameplay & UI), `audio.js` (synthesised bells and music), `style.css`.
+- `public/`: the game itself: `art.js` (all illustrations, hand-built SVG), `game.js` (gameplay & UI), `audio.js` (synthesised bells and Christmas carols), `style.css`.

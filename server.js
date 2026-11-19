@@ -172,6 +172,10 @@ wss.on('connection', (ws) => {
         if (room.game.solved.final && !room.finishedAt) room.finishedAt = Date.now();
         pushState(room);
         for (const fx of out.fx) broadcast(room.code, { t: 'fx', ...fx });
+        if (out.later) {
+          const g = room.game;
+          setTimeout(() => { if (room.game !== g) return; act(g, player, out.later.m); pushState(room); }, out.later.ms);
+        }
         break;
       }
       case 'reset': {

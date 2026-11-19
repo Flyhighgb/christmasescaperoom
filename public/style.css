@@ -340,3 +340,78 @@ body.in-game #snow { opacity: 0; }
 
 [hidden] { display: none !important; }
 .hero .fineprint { display: inline-block; background: rgba(13,24,48,.75); padding: 8px 16px; border-radius: 999px; color: #c3cde3; text-shadow: none; }
+
+/* ---------- depth: parallax, motes, light rays ---------- */
+.stage { --px: 0; --py: 0; }
+.fg { transform: translate(calc(var(--px) * -22px), calc(var(--py) * -12px)); transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+.scene.on .scene-svg { transform: translate(calc(var(--px) * 4px), calc(var(--py) * 3px)) scale(1.006); transition: transform .6s cubic-bezier(.2,.8,.2,1); }
+.mote { animation: mote linear infinite; }
+@keyframes mote { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 50% { transform: translate(30px, -60px); } 85% { opacity: .8; } 100% { transform: translate(-10px, -130px); opacity: 0; } }
+.rays { mix-blend-mode: screen; animation: rays 7s ease-in-out infinite; }
+@keyframes rays { 50% { opacity: .55; } }
+.watch-hand { transition: transform .4s cubic-bezier(.3,1.4,.6,1); }
+
+/* ---------- Elsie ---------- */
+.elsie { position: absolute; left: 6px; bottom: 0; width: 210px; height: 344px; z-index: 22; cursor: pointer; filter: drop-shadow(0 10px 18px rgba(0,0,0,.55)); animation: elsieIn .8s cubic-bezier(.2,1.4,.4,1) backwards; }
+.elsie:hover { filter: drop-shadow(0 0 16px rgba(255,217,138,.7)) drop-shadow(0 10px 18px rgba(0,0,0,.55)); }
+@keyframes elsieIn { from { transform: translateY(120%); } }
+.elsie-svg { width: 100%; height: 100%; overflow: visible; }
+.elsie-svg .e-body { animation: breathe 3.2s ease-in-out infinite; transform-origin: 110px 340px; }
+@keyframes breathe { 50% { transform: translateY(-3px) scaleY(1.01); } }
+.elsie-svg .e-head { animation: headTilt 6s ease-in-out infinite; transform-origin: 110px 150px; }
+@keyframes headTilt { 30% { transform: rotate(-3deg); } 70% { transform: rotate(2deg); } }
+.elsie-svg .e-eyes { animation: blink 4.5s infinite; transform-origin: 110px 104px; }
+@keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+.elsie-svg .e-bell { animation: hatBell 2.4s ease-in-out infinite; transform-origin: 170px 30px; }
+@keyframes hatBell { 50% { transform: rotate(14deg); } }
+.elsie-svg .e-wave { transform-origin: 144px 160px; }
+.elsie.talking .e-wave { animation: wave .7s ease-in-out infinite; }
+@keyframes wave { 50% { transform: rotate(-14deg); } }
+.elsie.talking .e-mouth { animation: talk .22s ease-in-out infinite alternate; transform-origin: 110px 124px; }
+@keyframes talk { from { transform: scaleY(.4); } to { transform: scaleY(1.25); } }
+.bubble { position: absolute; left: 196px; bottom: 236px; width: 560px; z-index: 23; background: linear-gradient(180deg, #fffaf0, #f4e7cc); color: #3a2a1e; border-radius: 26px; padding: 18px 54px 20px 24px; font-size: 24px; line-height: 1.4; box-shadow: 0 18px 40px rgba(0,0,0,.45), inset 0 0 0 3px #e6d2a6; animation: bubbleIn .35s cubic-bezier(.2,1.5,.4,1); }
+.bubble::after { content: ''; position: absolute; left: -18px; bottom: 28px; border: 16px solid transparent; border-right: 24px solid #f6ead2; border-left: 0; }
+.bubble b { display: block; font-family: var(--display); color: #1f7a4f; font-size: 20px; margin-bottom: 2px; }
+.bubble p { margin: 0; min-height: 1.4em; }
+.bubble-x { position: absolute; right: 12px; top: 10px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(0,0,0,.07); font-size: 20px; color: #7a6a58; }
+@keyframes bubbleIn { from { transform: scale(.7) translateX(-30px); opacity: 0; } }
+.robin-btn svg { border-radius: 50%; background: #fff3d6; }
+.panel header svg { border-radius: 50%; background: #fff3d6; }
+
+/* ---------- big feedback stamp ---------- */
+.verdict { position: absolute; left: 50%; top: 40%; z-index: 44; display: flex; align-items: center; gap: 22px; padding: 22px 40px 22px 24px; border-radius: 999px; transform: translate(-50%, -50%) scale(.4); opacity: 0; pointer-events: none; transition: transform .45s cubic-bezier(.2,1.6,.4,1), opacity .3s; box-shadow: 0 30px 60px rgba(0,0,0,.5); white-space: nowrap; }
+.verdict.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+.verdict.ok { background: linear-gradient(180deg, #2fbf7a, #17784a); box-shadow: 0 30px 60px rgba(0,0,0,.5), 0 0 0 6px rgba(143,240,185,.35), 0 0 80px rgba(47,191,122,.55); }
+.verdict.no { background: linear-gradient(180deg, #ef4a5e, #a3172a); box-shadow: 0 30px 60px rgba(0,0,0,.5), 0 0 0 6px rgba(255,154,166,.35); }
+.verdict.no.show { animation: vshake .5s .1s; }
+@keyframes vshake { 20%, 60% { margin-left: -16px; } 40%, 80% { margin-left: 16px; } }
+.vbadge { width: 92px; height: 92px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-size: 64px; font-weight: 900; }
+.verdict.ok .vbadge { color: #17784a; } .verdict.no .vbadge { color: #a3172a; }
+.vtext b { display: block; font-family: var(--display); font-size: 48px; color: #fff; line-height: 1.05; }
+.vtext span { display: block; font-size: 22px; color: #fff; opacity: .92; font-weight: 700; margin-top: 4px; }
+
+/* ---------- Christmas cards (3D flip) ---------- */
+.cards { display: grid; grid-template-columns: repeat(4, 128px); gap: 14px; perspective: 1200px; flex: none; }
+.card { width: 128px; height: 164px; padding: 0; border: 0; background: none; }
+.card .cin { position: relative; display: block; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.3,1.3,.5,1); }
+.card.up .cin { transform: rotateY(180deg); }
+.card .cback, .card .cface { position: absolute; inset: 0; border-radius: 14px; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 10px 18px rgba(0,0,0,.4); }
+.card .cback { background: radial-gradient(circle at 50% 50%, rgba(255,217,138,.35) 0 18%, transparent 19%), repeating-linear-gradient(45deg, #b81e33 0 12px, #a3172a 12px 24px); box-shadow: 0 10px 18px rgba(0,0,0,.4), inset 0 0 0 5px #f2b632, inset 0 0 0 8px #b81e33; }
+.card .cface { background: linear-gradient(180deg, #fffaf0, #efe2c4); transform: rotateY(180deg); display: grid; place-items: center; box-shadow: 0 10px 18px rgba(0,0,0,.4), inset 0 0 0 4px #e6d2a6; }
+.card .cface svg { width: 96px; height: 96px; }
+.card:hover:not(.up) .cin { transform: translateY(-6px) rotateX(6deg); }
+.card.done .cface { box-shadow: 0 0 0 4px #2fae6b, 0 0 24px rgba(47,174,107,.6); }
+.pairs { font-size: 24px; color: #c3cde3; } .pairs b { font-family: var(--display); font-size: 40px; color: var(--gold-soft); }
+
+/* ---------- album, watch, door key ---------- */
+.album { display: flex; gap: 24px; justify-content: center; }
+.photo { width: 520px; height: 378px; border-radius: 6px; background: #fff; padding: 0; box-shadow: 0 0 0 12px #fffaf0, 0 18px 36px rgba(0,0,0,.5); cursor: crosshair; }
+.photo:first-child { transform: rotate(-1.2deg); } .photo:last-child { transform: rotate(1deg); }
+.photo .ring { animation: pop .4s cubic-bezier(.3,1.6,.6,1); transform-box: fill-box; transform-origin: center; }
+.photo .miss { font-size: 34px; fill: #d7263d; font-weight: 900; text-anchor: middle; animation: fadeIn .2s reverse .5s forwards; }
+.watchctl { display: grid; gap: 12px; margin: 10px 0 26px; }
+.watchctl div { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; }
+.watchctl span { width: 170px; color: var(--gold-soft); }
+.watchctl .btn { font-size: 24px; padding: 10px 26px; color: var(--gold-soft); }
+.keystate { display: flex; align-items: center; gap: 14px; font-size: 21px; font-weight: 800; background: rgba(255,255,255,.06); border-radius: 16px; padding: 10px 16px; }
+.keystate svg { width: 56px; height: 56px; } .keystate .lockicon { font-size: 34px; }

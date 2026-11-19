@@ -31,7 +31,34 @@
     }).join('')}
     <filter id="fGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
     <filter id="fBigGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="14"/></filter>
-    <filter id="fShadow" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity=".45"/></filter>
+    <filter id="fShadow" x="-20%" y="-20%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="b"/>
+      <feDiffuseLighting in="b" surfaceScale="4" diffuseConstant="1.18" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="52"/></feDiffuseLighting>
+      <feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1" result="lit"/>
+      <feSpecularLighting in="b" surfaceScale="4" specularConstant=".55" specularExponent="18" lighting-color="#fff1d0" result="s"><feDistantLight azimuth="225" elevation="52"/></feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+      <feComposite in="lit" in2="s2" operator="arithmetic" k2="1" k3="1" result="obj"/>
+      <feComposite in="obj" in2="SourceAlpha" operator="in" result="objc"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="9" result="sb"/><feOffset in="sb" dx="6" dy="12" result="so"/>
+      <feComponentTransfer in="so" result="sh"><feFuncA type="linear" slope=".5"/></feComponentTransfer>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="objc"/></feMerge>
+    </filter>
+    <filter id="fBevel" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="b"/>
+      <feDiffuseLighting in="b" surfaceScale="5" diffuseConstant="1.2" lighting-color="#fff" result="d"><feDistantLight azimuth="225" elevation="50"/></feDiffuseLighting>
+      <feComposite in="SourceGraphic" in2="d" operator="arithmetic" k1="1" result="lit"/>
+      <feSpecularLighting in="b" surfaceScale="5" specularConstant=".6" specularExponent="16" lighting-color="#fff1d0" result="s"><feDistantLight azimuth="225" elevation="50"/></feSpecularLighting>
+      <feComposite in="s" in2="SourceAlpha" operator="in" result="s2"/>
+      <feComposite in="lit" in2="s2" operator="arithmetic" k2="1" k3="1" result="obj"/>
+      <feComposite in="obj" in2="SourceAlpha" operator="in"/>
+    </filter>
+    <filter id="fBlur6" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+    <linearGradient id="gFloorShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset=".35" stop-color="#000" stop-opacity=".15"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
+    <linearGradient id="gSkirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".6"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gCeil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gRay" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9b8" stop-opacity=".22"/><stop offset="1" stop-color="#ffe9b8" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gRayCool" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe4ff" stop-opacity=".2"/><stop offset="1" stop-color="#cfe4ff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="gCopper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc39a"/><stop offset=".5" stop-color="#c46a35"/><stop offset="1" stop-color="#7a3a17"/></linearGradient>
     <filter id="fRough"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" result="n"/><feColorMatrix in="n" type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 .08"/></feComponentTransfer><feComposite in2="SourceGraphic" operator="in"/><feBlend in="SourceGraphic" mode="multiply"/></filter>
   </defs></svg>`;
 
@@ -82,7 +109,38 @@
     return `<path d="M${x1} ${y} Q${mid} ${y + sag * 2} ${x2} ${y}" stroke="#174d36" stroke-width="10" fill="none"/>${leaves}${fairy(lights)}`;
   };
 
-  const plankFloor = (y, h, c1, c2) => {
+  // Perspective floorboards converging on a vanishing point, plus shading for depth.
+  const plankFloor = (y0, h, c1, c2) => {
+    const vx = 800, vy = y0 - 640, k = (y0 - vy) / (900 - vy);
+    let s = `<rect y="${y0}" width="1600" height="${h}" fill="${c1}"/>`;
+    const n = 7, rows = [];
+    for (let j = 0; j <= n; j++) rows.push(y0 + h * Math.pow(j / n, 1.45));
+    const boards = [];
+    for (let i = -26; i <= 26; i++) boards.push(vx + i * 96);
+    const xAt = (xb, y) => vx + (xb - vx) * (y - vy) / (900 - vy);
+    for (let i = 0; i < boards.length - 1; i++) {
+      for (let j = 0; j < n; j++) {
+        const ya = rows[j], yb = rows[j + 1];
+        const shade = ((i * 7 + j * 3) % 5) / 5;
+        s += `<path d="M${xAt(boards[i], ya).toFixed(0)} ${ya.toFixed(0)} L${xAt(boards[i + 1], ya).toFixed(0)} ${ya.toFixed(0)} L${xAt(boards[i + 1], yb).toFixed(0)} ${yb.toFixed(0)} L${xAt(boards[i], yb).toFixed(0)} ${yb.toFixed(0)}Z" fill="#fff" opacity="${(shade * 0.05).toFixed(3)}"/>`;
+        if ((i + j * 2) % 3 === 0) s += `<line x1="${xAt(boards[i], ya).toFixed(0)}" x2="${xAt(boards[i + 1], ya).toFixed(0)}" y1="${ya.toFixed(0)}" y2="${ya.toFixed(0)}" stroke="${c2}" stroke-width="2"/>`;
+      }
+      s += `<line x1="${xAt(boards[i], y0).toFixed(0)}" y1="${y0}" x2="${boards[i].toFixed(0)}" y2="900" stroke="${c2}" stroke-width="2.5"/>`;
+    }
+    s += `<rect y="${y0}" width="1600" height="${h}" fill="url(#gFloorShade)"/>`;
+    s += `<rect y="${y0}" width="1600" height="26" fill="url(#gSkirt)"/>`;
+    return s;
+  };
+  const ceiling = () => `<rect width="1600" height="160" fill="url(#gCeil)" pointer-events="none"/>`;
+  // Out-of-focus foreground decorations that drift with the mouse (parallax).
+  const fgBokeh = (spots) => `<g class="fg" pointer-events="none">${spots.map(([x, y, r, c, o]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" opacity="${o}" filter="url(#fBlur6)"/>`).join('')}</g>`;
+  const fgBranch = (x, y, flip, lights = true) => `<g class="fg" pointer-events="none"><g transform="translate(${x} ${y}) scale(${flip ? -1 : 1} 1)" filter="url(#fBlur6)" opacity=".95">
+      <path d="M-40 -20 Q120 40 300 10" stroke="#3a2416" stroke-width="12" fill="none"/>
+      ${Array.from({ length: 26 }, (_, i) => { const t = i / 25; const px = -30 + t * 320, py = -14 + Math.sin(t * 3) * 18 + 30 * t * (1 - t); return `<ellipse cx="${px.toFixed(0)}" cy="${py.toFixed(0)}" rx="46" ry="14" fill="${i % 2 ? '#123d2b' : '#185238'}" transform="rotate(${(i % 2 ? 35 : -30) + i * 3} ${px.toFixed(0)} ${py.toFixed(0)})"/>`; }).join('')}
+      ${lights ? [[40, 10], [120, 34], [200, 30], [270, 18]].map(([lx, ly]) => `<circle cx="${lx}" cy="${ly}" r="16" fill="#ffd98a" opacity=".85"/>`).join('') : ''}
+      <circle cx="160" cy="44" r="20" fill="#d7263d"/></g></g>`;
+  const dust = (x, y, w, h, n) => { let d = ''; for (let i = 0; i < n; i++) d += `<circle class="mote" cx="${r1(x, x + w).toFixed(0)}" cy="${r1(y, y + h).toFixed(0)}" r="${r1(1, 2.6).toFixed(1)}" fill="#fff3d0" style="animation-delay:-${r1(0, 12).toFixed(1)}s;animation-duration:${r1(9, 16).toFixed(1)}s"/>`; return `<g pointer-events="none" opacity=".6">${d}</g>`; };
+  const _unusedPlank = (y, h, c1, c2) => {
     let s = `<rect y="${y}" width="1600" height="${h}" fill="${c1}"/>`;
     for (let i = 0; i < 6; i++) s += `<line x1="0" x2="1600" y1="${y + i * h / 6}" y2="${y + i * h / 6}" stroke="${c2}" stroke-width="2"/>`;
     for (let i = 0; i < 26; i++) { const row = i % 6; const x = (i * 263) % 1600; s += `<line x1="${x}" x2="${x}" y1="${y + row * h / 6}" y2="${y + (row + 1) * h / 6}" stroke="${c2}" stroke-width="2"/>`; }
@@ -201,6 +259,10 @@
       <rect x="532" y="396" width="436" height="6" rx="3" fill="#a46b42"/>
       <rect x="536" y="790" width="428" height="18" fill="#3f342f"/>
     </g>
+
+    ${hs('cards', 'Christmas cards on the mantelpiece', `
+      <rect x="548" y="340" width="150" height="58" fill="#000" opacity="0"/><rect x="804" y="340" width="150" height="58" fill="#000" opacity="0"/>
+      ${[[560, -8, '#c22436'], [600, 4, '#f7eedc'], [645, -4, '#1f6b4a'], [815, 6, '#2f5fb0'], [858, -6, '#f7eedc'], [900, 5, '#c22436']].map(([x, r, c], i) => `<g transform="rotate(${r} ${x + 18} 396)" filter="url(#fShadow)"><path d="M${x} 396 L${x + 6} 350 L${x + 40} 350 L${x + 36} 396Z" fill="${c}"/><path d="M${x + 6} 350 L${x + 40} 350" stroke="#00000033" stroke-width="2"/>${c === '#f7eedc' ? `<path d="M${x + 22} 360 l3 7 7 0 -6 4 2 7 -6 -4 -6 4 2 -7 -6 -4 7 0z" fill="#d7263d"/>` : `<circle cx="${x + 22}" cy="${372}" r="7" fill="#fff" opacity=".85"/><path d="M${x + 22} 362 v20 M${x + 13} 372 h18" stroke="#fff" stroke-width="2" opacity=".6"/>`}</g>`).join('')}`)}
     ${stocking(620, '#c22436', '#f7eedc')}${stocking(750, '#1f6b4a', '#f7eedc')}${stocking(880, '#f7eedc', '#c22436', true)}
     ${garland(540, 960, 404, 16)}
     <!-- mantel clock, stopped -->
@@ -216,7 +278,7 @@
     <!-- tree -->
     <ellipse cx="1200" cy="788" rx="230" ry="26" fill="#000" opacity=".35"/>
     <rect x="1182" y="720" width="36" height="66" fill="#4a2a17"/>
-    ${tiers}
+    <g filter="url(#fBevel)">${tiers}</g>
     ${garland(1130, 1270, 300, 12).replace(/<ellipse[^>]*>/g, '')}
     ${fairy(treeLights)}
     ${baubles}
@@ -253,7 +315,7 @@
         <text x="1520" y="540" text-anchor="middle" font-family="Fraunces, serif" font-size="22" fill="#3a1d0c" font-weight="700">Workshop</text>
         <path d="M1500 560 h30 l-8 -8 m8 8 l-8 8" stroke="#3a1d0c" stroke-width="3" fill="none"/>
       </g>
-      <g id="pDoorClosed">
+      <g id="pDoorClosed" filter="url(#fBevel)">
         <rect x="1440" y="258" width="134" height="550" fill="url(#gWood)"/>
         <rect x="1456" y="280" width="102" height="200" rx="6" fill="none" stroke="#3e2211" stroke-width="5"/>
         <rect x="1456" y="510" width="102" height="270" rx="6" fill="none" stroke="#3e2211" stroke-width="5"/>
@@ -262,6 +324,10 @@
         <g transform="translate(1507 610)"><rect x="-44" y="-18" width="88" height="44" rx="8" fill="url(#gBrass)" stroke="#8a6420" stroke-width="2"/><path d="M-26 -16 v-14 a26 26 0 0 1 52 0 v14" stroke="#b6862e" stroke-width="7" fill="none"/>${Array.from({ length: 8 }, (_, i) => `<rect x="${-38 + i * 9.6}" y="-6" width="8" height="20" rx="1.5" fill="#f7eedc"/>`).join('')}</g>
       </g>`)}
 
+    ${dust(500, 300, 600, 400, 22)}
+    ${ceiling()}
+    ${fgBranch(-60, 40, false)}${fgBranch(1660, 60, true)}
+    ${fgBokeh([[1560, 860, 40, '#ffb347', .35], [40, 870, 30, '#ff8a3d', .3], [1500, 120, 22, '#ffd98a', .3]])}
     <path d="M0 0H1600V900H0Z" fill="url(#gVig)" pointer-events="none"/>
     </svg>`;
   };
@@ -280,7 +346,7 @@
       <g transform="translate(330 140)"><rect x="-10" y="0" width="20" height="44" rx="4" fill="#c22436"/><circle cy="-8" r="10" fill="#f2d3b0"/><rect x="-11" y="-26" width="22" height="16" rx="3" fill="#1d2433"/><rect x="-10" y="44" width="8" height="18" fill="#1d2433"/><rect x="2" y="44" width="8" height="18" fill="#1d2433"/></g>
       <g transform="translate(410 160)"><rect x="-26" y="10" width="52" height="30" rx="4" fill="#2f7fe0"/><rect x="0" y="-8" width="22" height="20" fill="#2f7fe0"/><rect x="-20" y="0" width="8" height="12" fill="#1d2433"/><circle cx="-14" cy="44" r="8" fill="#1d2433"/><circle cx="14" cy="44" r="8" fill="#1d2433"/></g>
       <g transform="translate(470 168)"><circle r="20" fill="#f2b632"/><circle r="20" fill="url(#gShade)"/><path d="M-20 0 h40" stroke="#c22436" stroke-width="4"/></g>`;
-    const bells = ['red', 'gold', 'green', 'blue', 'silver'].map((c, i) => `<g transform="translate(${bellX[i]} 308)"><line x1="0" y1="-62" x2="0" y2="-30" stroke="#3a2111" stroke-width="3"/><g transform="translate(0 30) scale(.55)"><g class="bell-swing" id="wb-${c}">${A.bellShape(c)}</g></g></g>`).join('');
+    const bells = ['red', 'gold', 'green', 'blue', 'silver'].map((c, i) => `<g transform="translate(${bellX[i]} 308)"><line x1="0" y1="-62" x2="0" y2="-30" stroke="#3a2111" stroke-width="3"/><g transform="translate(0 30) scale(.55)"><g class="bell-swing" id="wb-${c}" filter="url(#fBevel)">${A.bellShape(c)}</g></g></g>`).join('');
     return `<svg viewBox="0 0 1600 900" class="scene-svg" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="wWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#21140e"/><stop offset=".7" stop-color="#3f2716"/><stop offset="1" stop-color="#4c2f1a"/></linearGradient>
@@ -348,7 +414,11 @@
       <rect x="540" y="616" width="24" height="200" fill="#3e2211"/><rect x="1096" y="616" width="24" height="200" fill="#3e2211"/>
       <rect x="540" y="716" width="580" height="16" fill="#3e2211"/>
     </g>
-    <g><rect x="960" y="560" width="110" height="26" rx="4" fill="#5c331b"/><path d="M972 560 v-18 h20 v18 M1020 560 v-30 h10 v30" fill="#8a8f99"/><circle cx="1050" cy="550" r="8" fill="#c22436"/></g>
+    ${hs('album', "Grandpa's photo album", `
+      <rect x="950" y="520" width="140" height="70" fill="#000" opacity="0"/>
+      <g filter="url(#fShadow)"><path d="M958 584 L976 548 L1086 548 L1072 584Z" fill="#2f5fb0"/><path d="M958 584 L976 548 L1086 548 L1072 584Z" fill="url(#gShade)" opacity=".5"/>
+      <path d="M972 584 L986 556 L1066 556 L1056 584Z" fill="#f7eedc" opacity=".2"/><path d="M990 560 L1048 560 L1042 578 L984 578Z" fill="#f7eedc"/><path d="M996 574 l10 -8 8 6 10 -10 12 12z" fill="#2f7fe0" opacity=".7"/>
+      <path d="M958 584 L1072 584 L1072 590 L958 590Z" fill="#1d3b70"/></g>`)}
     <g transform="translate(900 572)"><path d="M0 0 l40 -10 l4 6 l-40 10z" fill="#8a8f99"/><rect x="-30" y="-2" width="34" height="12" rx="4" fill="#7a2030"/></g>
     ${hs('ledger', "The elves' ledger", `
       <g transform="translate(720 560)">
@@ -379,7 +449,12 @@
         <g id="wCabOpen" style="display:none"><rect x="1330" y="600" width="196" height="190" rx="4" fill="#120a05"/><path d="M1330 600 l-30 14 v164 l30 12z" fill="#6b3d22"/><circle cx="1428" cy="700" r="50" fill="url(#gWarm)"/></g>
       </g>`)}
 
-    ${hs('toParlour', 'Back to the parlour', `<g transform="translate(64 838)"><rect x="-44" y="-26" width="200" height="52" rx="26" fill="#0d1830" opacity=".75" stroke="#ffd98a" stroke-opacity=".6"/><path d="M-20 0 h28 m-28 0 l12 -12 m-12 12 l12 12" stroke="#ffd98a" stroke-width="4" fill="none" stroke-linecap="round"/><text x="22" y="7" font-family="Nunito, sans-serif" font-size="20" font-weight="800" fill="#ffe7b0">Parlour</text></g>`)}
+    ${hs('toParlour', 'Back to the parlour', `<g transform="translate(270 850)"><rect x="-44" y="-26" width="200" height="52" rx="26" fill="#0d1830" opacity=".75" stroke="#ffd98a" stroke-opacity=".6"/><path d="M-20 0 h28 m-28 0 l12 -12 m-12 12 l12 12" stroke="#ffd98a" stroke-width="4" fill="none" stroke-linecap="round"/><text x="22" y="7" font-family="Nunito, sans-serif" font-size="20" font-weight="800" fill="#ffe7b0">Parlour</text></g>`)}
+    <g class="rays" pointer-events="none"><path d="M600 120 L840 120 L1100 800 L380 800Z" fill="url(#gRayCool)"/></g>
+    ${dust(460, 160, 700, 600, 26)}
+    ${ceiling()}
+    ${fgBokeh([[1580, 70, 36, '#ffd98a', .35], [60, 120, 26, '#ffb347', .3], [1540, 880, 46, '#ff9e3d', .3]])}
+    ${fgBranch(1680, 20, true)}
     <path d="M0 0H1600V900H0Z" fill="url(#gVig)" pointer-events="none"/>
     </svg>`;
   };
@@ -406,7 +481,7 @@
     <!-- Great clock -->
     <g transform="translate(800 352)">
       <circle r="290" fill="url(#gCool)" class="clock-glow"/>
-      <circle r="262" fill="#2d2a33" stroke="url(#gBrass)" stroke-width="16"/>
+      <circle r="262" fill="#2d2a33" stroke="url(#gBrass)" stroke-width="16" filter="url(#fBevel)"/>
       <circle r="238" fill="url(#aFace)"/>
       ${Array.from({ length: 60 }, (_, i) => { const a = i / 60 * Math.PI * 2; const r0 = i % 5 ? 222 : 212; return `<line x1="${(Math.sin(a) * r0).toFixed(1)}" y1="${(-Math.cos(a) * r0).toFixed(1)}" x2="${(Math.sin(a) * 232).toFixed(1)}" y2="${(-Math.cos(a) * 232).toFixed(1)}" stroke="#2a2f45" stroke-width="${i % 5 ? 2 : 5}"/>`; }).join('')}
       ${numerals.map((n, i) => { const a = i / 12 * Math.PI * 2; return `<text x="${(Math.sin(a) * 180).toFixed(1)}" y="${(-Math.cos(a) * 180 + 12).toFixed(1)}" text-anchor="middle" font-family="Fraunces, serif" font-size="36" font-weight="700" fill="#2a2f45">${n}</text>`; }).join('')}
@@ -425,12 +500,19 @@
     <!-- mechanism case -->
     ${hs('gears', 'The clock mechanism', `
       <g filter="url(#fShadow)"><rect x="660" y="722" width="280" height="96" rx="8" fill="url(#gWoodDark)"/><rect x="674" y="732" width="252" height="76" rx="4" fill="#0f1422"/>
-      <g transform="translate(730 770)"><g class="spin-slow mech" style="animation-duration:12s">${A.gear(26, 10, 'url(#gBrass)')}</g></g>
-      <g id="aSlot0"><circle cx="800" cy="770" r="10" fill="#555"/><circle cx="800" cy="770" r="30" fill="none" stroke="#ffffff33" stroke-dasharray="6 6"/></g>
-      <g id="aSlot1"><circle cx="868" cy="770" r="8" fill="#555"/><circle cx="868" cy="770" r="22" fill="none" stroke="#ffffff33" stroke-dasharray="5 5"/></g>
-      <g id="aGear0" style="display:none" transform="translate(800 770)"><g class="spin-slow mech-r" style="animation-duration:9s">${A.gear(28, 12, 'url(#gBrass)')}</g></g>
-      <g id="aGear1" style="display:none" transform="translate(868 770)"><g class="spin-slow mech" style="animation-duration:6s">${A.gear(20, 9, 'url(#gSilver)')}</g></g>
+      <g transform="translate(708 770)"><g class="spin-slow mech" style="animation-duration:12s">${A.gear(22, 9, 'url(#gBrass)')}</g></g>
+      ${[[770, 26], [836, 22], [892, 19]].map(([x, r], i) => `<g id="aSlot${i}"><circle cx="${x}" cy="770" r="8" fill="#555"/><circle cx="${x}" cy="770" r="${r}" fill="none" stroke="#ffffff33" stroke-dasharray="5 5"/></g>`).join('')}
+      <g id="aGear0" style="display:none" transform="translate(770 770)"><g class="spin-slow mech-r" style="animation-duration:9s">${A.gear(24, 11, 'url(#gBrass)')}</g></g>
+      <g id="aGear1" style="display:none" transform="translate(836 770)"><g class="spin-slow mech" style="animation-duration:7s">${A.gear(20, 9, 'url(#gSilver)')}</g></g>
+      <g id="aGear2" style="display:none" transform="translate(892 770)"><g class="spin-slow mech-r" style="animation-duration:5s">${A.gear(17, 8, 'url(#gCopper)')}</g></g>
       <rect x="674" y="732" width="252" height="76" rx="4" fill="url(#gCool)" opacity=".18"/></g>`)}
+
+    ${hs('watch', "Grandpa's pocket watch", `
+      <rect x="990" y="620" width="160" height="200" fill="#000" opacity="0"/>
+      <g filter="url(#fShadow)"><ellipse cx="1070" cy="664" rx="78" ry="16" fill="#6b3d22"/><rect x="996" y="664" width="148" height="10" fill="#4e2b17"/>
+      <path d="M1012 672 L1004 816 M1128 672 L1136 816 M1070 676 L1070 816" stroke="#4e2b17" stroke-width="9"/></g>
+      <g filter="url(#fShadow)"><path d="M1094 650 q30 -6 34 8" stroke="url(#gBrass)" stroke-width="3" fill="none" stroke-dasharray="4 3"/>
+      <ellipse cx="1066" cy="650" rx="26" ry="12" fill="url(#gBrass)"/><ellipse cx="1066" cy="648" rx="20" ry="8" fill="#f7eedc"/><rect x="1062" y="634" width="8" height="7" rx="2" fill="url(#gBrass)"/></g>`)}
 
     <!-- cipher wheel -->
     ${hs('wheel', 'A cipher wheel on a stand', `
@@ -454,6 +536,9 @@
       <g transform="rotate(-32)"><rect x="-30" y="-16" width="170" height="32" rx="8" fill="url(#gBrass)"/><rect x="-60" y="-11" width="40" height="22" rx="5" fill="#8a6420"/><rect x="130" y="-21" width="22" height="42" rx="6" fill="#b88d34"/></g></g>`)}
 
     ${hs('toWorkshop', 'Down to the workshop', `<g transform="translate(1440 850)"><rect x="-70" y="-26" width="200" height="52" rx="26" fill="#0d1830" opacity=".75" stroke="#ffd98a" stroke-opacity=".6"/><path d="M-44 -12 v24 m0 0 l-11 -11 m11 11 l11 -11" stroke="#ffd98a" stroke-width="4" fill="none" stroke-linecap="round"/><text x="-20" y="7" font-family="Nunito, sans-serif" font-size="20" font-weight="800" fill="#ffe7b0">Workshop</text></g>`)}
+    <g class="rays" pointer-events="none"><path d="M1260 240 L1400 240 L1300 820 L900 820Z" fill="url(#gRayCool)"/></g>
+    ${dust(900, 260, 500, 500, 22)}
+    ${fgBokeh([[30, 860, 44, '#cfe4ff', .25], [1590, 40, 30, '#cfe4ff', .25], [60, 60, 24, '#ffd98a', .25]])}
     <path d="M0 0H1600V900H0Z" fill="url(#gVig)" pointer-events="none"/>
     </svg>`;
   };
@@ -489,7 +574,7 @@
       <!-- village -->
       <g>
         <rect x="90" y="250" width="56" height="190" fill="#3c3446"/><path d="M84 252 L118 196 L152 252Z" fill="#7a2030"/>
-        <circle cx="118" cy="296" r="18" fill="#f7eedc"/><path d="M118 296 v-12 M118 296 l8 4" stroke="#2a2234" stroke-width="3"/>
+        <circle cx="118" cy="296" r="22" fill="#f7eedc" stroke="#d8a845" stroke-width="3"/>${[0, 1, 2, 3].map((q) => `<circle cx="${118 + [0, 16, 0, -16][q]}" cy="${296 + [-16, 0, 16, 0][q]}" r="2" fill="#2a2234"/>`).join('')}<path d="M118 296 L118 314" stroke="#2a2234" stroke-width="2.5" stroke-linecap="round"/><path d="M118 296 L108 305" stroke="#2a2234" stroke-width="4" stroke-linecap="round"/>
         <rect x="108" y="350" width="20" height="30" fill="#ffd27a"/>
         ${[[170, 400, 80], [260, 420, 70], [30, 420, 60], [340, 440, 66]].map(([x, y, w]) => `<rect x="${x}" y="${y}" width="${w}" height="${w * .7}" fill="#4a3a52"/><path d="M${x - 6} ${y} L${x + w / 2} ${y - w * .45} L${x + w + 6} ${y}Z" fill="#f7fbff"/><rect x="${x + w * .2}" y="${y + w * .2}" width="${w * .2}" height="${w * .2}" fill="#ffd27a"/><rect x="${x + w * .6}" y="${y + w * .2}" width="${w * .2}" height="${w * .2}" fill="#ffd27a"/>`).join('')}
       </g>
@@ -559,6 +644,105 @@
      <g transform="translate(1340 400) scale(.7)">${A.toy.kite.replace('<svg viewBox="0 0 100 100">', '').replace('</svg>', '')}</g>
      <g transform="translate(1440 400) scale(.7)">${A.toy.teddy.replace('<svg viewBox="0 0 100 100">', '').replace('</svg>', '')}</g>
      <g transform="translate(1385 492) scale(.7)" opacity=".7">${A.toy.horse.replace('<svg viewBox="0 0 100 100">', '').replace('</svg>', '')}</g>`);
+
+
+  // ---------- extra items ----------
+  A.icon.doorKey = `<svg viewBox="0 0 80 80"><circle cx="22" cy="40" r="14" fill="none" stroke="url(#gBrass)" stroke-width="7"/><rect x="34" y="36" width="40" height="8" rx="3" fill="url(#gBrass)"/><rect x="58" y="44" width="6" height="12" fill="url(#gBrass)"/><rect x="68" y="44" width="6" height="9" fill="url(#gBrass)"/><path d="M14 30 q4 -6 12 -4" stroke="#fff" stroke-width="2" fill="none" opacity=".7"/></svg>`;
+  A.icon.copperGear = `<svg viewBox="-50 -50 100 100"><g class="spin-slow" style="animation-duration:8s">${A.gear(26, 8, 'url(#gCopper)')}</g></svg>`;
+  A.itemName.doorKey = 'Brass door key';
+  A.itemName.copperGear = 'Copper gear';
+
+  // ---------- Christmas card faces ----------
+  A.card = {
+    star: `<path d="M50 14 L60 38 L86 39 L65 55 L73 80 L50 65 L27 80 L35 55 L14 39 L40 38Z" fill="#f2b632" stroke="#c48b16" stroke-width="3"/>`,
+    bell: `<path d="M50 18 C66 18 70 34 71 50 C72 64 76 70 84 74 L16 74 C24 70 28 64 29 50 C30 34 34 18 50 18Z" fill="#f2b632" stroke="#a8761a" stroke-width="3"/><circle cx="50" cy="80" r="7" fill="#c48b16"/><path d="M38 20 q12 -14 24 0" stroke="#d7263d" stroke-width="6" fill="none"/>`,
+    bauble: `<rect x="44" y="14" width="12" height="10" rx="2" fill="#d8a845"/><circle cx="50" cy="56" r="30" fill="#2f7fe0"/><path d="M22 50 Q50 40 78 50 M22 62 Q50 72 78 62" stroke="#fff" stroke-width="4" fill="none" opacity=".8"/><ellipse cx="38" cy="42" rx="8" ry="5" fill="#fff" opacity=".7"/>`,
+    cane: `<path d="M64 88 V34 A16 16 0 0 0 32 34" stroke="#fff" stroke-width="14" fill="none" stroke-linecap="round"/><path d="M64 88 V34 A16 16 0 0 0 32 34" stroke="#d7263d" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="7 9"/>`,
+    snowman: `<circle cx="50" cy="70" r="20" fill="#fff" stroke="#c9d3df" stroke-width="2"/><circle cx="50" cy="38" r="15" fill="#fff" stroke="#c9d3df" stroke-width="2"/><rect x="38" y="12" width="24" height="14" rx="2" fill="#1d2233"/><rect x="32" y="24" width="36" height="5" rx="2" fill="#1d2233"/><circle cx="45" cy="36" r="2" fill="#1d2233"/><circle cx="55" cy="36" r="2" fill="#1d2233"/><path d="M50 40 l12 3 l-12 2z" fill="#f08a3f"/><path d="M36 50 h28" stroke="#d7263d" stroke-width="5"/>`,
+    gingerbread: `<path d="M50 14 a12 12 0 0 1 12 12 a12 12 0 0 1 -3 8 h16 a7 7 0 0 1 0 14 h-13 l10 30 a7 7 0 0 1 -13 5 l-9 -20 l-9 20 a7 7 0 0 1 -13 -5 l10 -30 h-13 a7 7 0 0 1 0 -14 h16 a12 12 0 0 1 -3 -8 a12 12 0 0 1 12 -12z" fill="#b8733a"/><circle cx="45" cy="24" r="2" fill="#2a1a10"/><circle cx="55" cy="24" r="2" fill="#2a1a10"/><path d="M45 30 q5 4 10 0" stroke="#fff" stroke-width="2" fill="none"/><circle cx="50" cy="44" r="3" fill="#d7263d"/><circle cx="50" cy="54" r="3" fill="#2fae6b"/>`,
+    stocking: `<path d="M36 16 H64 V58 Q64 72 78 76 Q90 80 86 90 Q82 98 66 94 Q36 88 36 66Z" fill="#d7263d"/><rect x="32" y="12" width="36" height="14" rx="5" fill="#fff"/><path d="M40 40 h20 M40 50 h20" stroke="#fff" stroke-width="3" opacity=".6"/>`,
+    holly: `<path d="M50 54 C40 30 20 34 14 24 C20 42 10 46 18 56 C28 50 38 58 50 54Z" fill="#1f7a4f"/><path d="M50 54 C60 30 80 34 86 24 C80 42 90 46 82 56 C72 50 62 58 50 54Z" fill="#2fae6b"/><circle cx="44" cy="62" r="8" fill="#d7263d"/><circle cx="56" cy="62" r="8" fill="#d7263d"/><circle cx="50" cy="72" r="8" fill="#e2384b"/>`,
+  };
+
+  // ---------- photo for spot-the-difference (440x320). b = true for the altered copy ----------
+  A.SPOTS = [[376, 167, 26], [90, 62, 28], [274, 163, 26], [190, 268, 44], [380, 58, 36]];
+  A.photo = (b) => `
+    <defs><linearGradient id="phSky${b ? 'B' : 'A'}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1a3a"/><stop offset="1" stop-color="#3d5a8f"/></linearGradient></defs>
+    <rect width="440" height="320" fill="url(#phSky${b ? 'B' : 'A'})"/>
+    ${[[30, 30], [150, 40], [210, 20], [300, 50], [250, 90], [130, 100]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.8" fill="#fff"/>`).join('')}
+    ${b ? '' : '<circle cx="380" cy="58" r="24" fill="#fdf3d0"/><circle cx="372" cy="52" r="4" fill="#ebdfb2"/>'}
+    <path d="M0 214 Q220 186 440 214 V320 H0Z" fill="#eef4ff"/>
+    <rect x="170" y="130" width="130" height="96" fill="#7a3e2a"/>
+    <path d="M158 132 L235 80 L312 132Z" fill="#3b2a3a"/><path d="M154 134 L235 76 L316 134 L306 138 L235 88 L164 138Z" fill="#fff"/>
+    <rect x="270" y="88" width="18" height="30" fill="#4a2c22"/><rect x="266" y="84" width="26" height="8" fill="#fff"/>
+    <rect x="184" y="150" width="28" height="26" fill="#ffd27a"/><path d="M198 150 v26 M184 163 h28" stroke="#7a3e2a" stroke-width="3"/>
+    <rect x="260" y="150" width="28" height="26" fill="${b ? '#1d2233' : '#ffd27a'}"/><path d="M274 150 v26 M260 163 h28" stroke="#7a3e2a" stroke-width="3"/>
+    <path d="M222 226 V188 Q235 176 248 188 V226Z" fill="#a3172a"/>
+    <path d="M90 70 l-34 60 h68z M90 100 l-42 66 h84z M90 134 l-50 74 h100z" fill="#1f6b4a"/><rect x="82" y="208" width="16" height="18" fill="#5a3320"/>
+    ${b ? '' : '<path d="M90 46 L95 58 L108 58 L98 66 L102 79 L90 71 L78 79 L82 66 L72 58 L85 58Z" fill="#ffd45c"/>'}
+    <circle cx="96" cy="120" r="5" fill="#d7263d"/><circle cx="78" cy="160" r="5" fill="#2f7fe0"/><circle cx="104" cy="186" r="5" fill="#f2b632"/>
+    <circle cx="360" cy="238" r="28" fill="#fff" stroke="#c9d3df" stroke-width="2"/><circle cx="360" cy="196" r="20" fill="#fff" stroke="#c9d3df" stroke-width="2"/><circle cx="360" cy="164" r="15" fill="#fff" stroke="#c9d3df" stroke-width="2"/>
+    <rect x="348" y="136" width="24" height="16" fill="#1d2233"/><rect x="342" y="150" width="36" height="5" fill="#1d2233"/>
+    <circle cx="355" cy="161" r="2" fill="#1d2233"/><circle cx="365" cy="161" r="2" fill="#1d2233"/>
+    ${b ? '' : '<path d="M362 166 L392 170 L362 173Z" fill="#f08a3f"/>'}
+    <path d="M342 182 h36" stroke="#d7263d" stroke-width="6"/>
+    <g transform="translate(190 268)"><path d="M-46 14 Q-56 14 -54 4 M-46 14 H44 Q56 14 54 2" stroke="#5a3a26" stroke-width="4" fill="none"/><rect x="-40" y="-14" width="80" height="22" rx="5" fill="${b ? '#2f7fe0' : '#d7263d'}"/><path d="M-30 -14 v22 M0 -14 v22 M30 -14 v22" stroke="#00000033" stroke-width="3"/></g>
+    ${[24, 44, 64, 404, 424].map((x) => `<rect x="${x}" y="236" width="8" height="34" fill="#8a5532"/>`).join('')}<path d="M18 246 H72 M398 246 H436" stroke="#8a5532" stroke-width="5"/>
+  `;
+
+  // ---------- pocket watch (viewBox -200 -230 400 460) ----------
+  A.watch = (h, m) => {
+    const ha = ((h % 12) + m / 60) * 30, ma = m * 6;
+    return `<path d="M0 -205 q60 -20 120 10" stroke="url(#gBrass)" stroke-width="6" fill="none" stroke-dasharray="10 6"/>
+      <circle cx="0" cy="-196" r="16" fill="none" stroke="url(#gBrass)" stroke-width="7"/><rect x="-16" y="-186" width="32" height="24" rx="6" fill="url(#gBrass)"/>
+      <circle r="176" fill="url(#gBrass)" stroke="#7a5418" stroke-width="5" filter="url(#fBevel)"/>
+      <circle r="150" fill="#fbf4e3" stroke="#a77a24" stroke-width="3"/>
+      ${Array.from({ length: 60 }, (_, i) => { const a = i / 60 * Math.PI * 2; const r0 = i % 5 ? 138 : 128; return `<line x1="${(Math.sin(a) * r0).toFixed(1)}" y1="${(-Math.cos(a) * r0).toFixed(1)}" x2="${(Math.sin(a) * 144).toFixed(1)}" y2="${(-Math.cos(a) * 144).toFixed(1)}" stroke="#3a2a1e" stroke-width="${i % 5 ? 1.5 : 4}"/>`; }).join('')}
+      ${Array.from({ length: 12 }, (_, i) => { const a = (i + 1) / 12 * Math.PI * 2; return `<text x="${(Math.sin(a) * 104).toFixed(1)}" y="${(-Math.cos(a) * 104 + 11).toFixed(1)}" text-anchor="middle" font-family="Fraunces, serif" font-size="30" font-weight="800" fill="#3a2a1e">${i + 1}</text>`; }).join('')}
+      <g class="watch-hand" style="transform:rotate(${ha}deg)"><path d="M-8 16 L0 -78 L8 16Z" fill="#1d2233"/></g>
+      <g class="watch-hand" style="transform:rotate(${ma}deg)"><path d="M-5 20 L0 -122 L5 20Z" fill="#7a1222"/></g>
+      <circle r="10" fill="url(#gBrass)"/>`;
+  };
+
+  // ---------- Elsie, Grandpa's elf apprentice (viewBox 0 0 220 360) ----------
+  A.elsie = `<svg viewBox="0 0 220 360" class="elsie-svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="eTunic" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#14583a"/><stop offset=".42" stop-color="#2fa36a"/><stop offset="1" stop-color="#0f4029"/></linearGradient>
+      <radialGradient id="eSkin" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#ffe6d3"/><stop offset=".65" stop-color="#f4c09e"/><stop offset="1" stop-color="#d9946f"/></radialGradient>
+      <linearGradient id="eHat" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f04a5c"/><stop offset="1" stop-color="#8f1d2c"/></linearGradient>
+      <linearGradient id="eHair" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2793a"/><stop offset="1" stop-color="#8a3a15"/></linearGradient>
+      <linearGradient id="eFur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d6e0ee"/></linearGradient>
+      <pattern id="eStripe" width="20" height="16" patternUnits="userSpaceOnUse"><rect width="20" height="16" fill="#fff"/><rect width="20" height="8" fill="#d7263d"/></pattern>
+    </defs>
+    <ellipse cx="110" cy="350" rx="74" ry="9" fill="#000" opacity=".4"/>
+    <g class="e-body">
+      <rect x="84" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/><rect x="116" y="250" width="20" height="88" rx="6" fill="url(#eStripe)"/>
+      <path d="M104 334 H78 Q58 334 54 320 Q66 326 76 322 L104 322Z" fill="#1f6b4a"/><circle cx="54" cy="318" r="5" fill="#f2b632"/>
+      <path d="M116 334 H142 Q162 334 166 320 Q154 326 144 322 L116 322Z" fill="#1f6b4a"/><circle cx="166" cy="318" r="5" fill="#f2b632"/>
+      <path d="M72 150 Q110 138 148 150 L178 262 Q110 282 42 262Z" fill="url(#eTunic)"/>
+      <path d="M42 262 l10 12 10 -10 12 12 12 -10 12 12 12 -10 12 12 12 -10 12 12 12 -10 10 10 L178 262 Q110 282 42 262Z" fill="url(#eFur)"/>
+      <rect x="58" y="204" width="104" height="15" rx="4" fill="#2a1a12"/><rect x="100" y="201" width="20" height="21" rx="3" fill="none" stroke="#f2b632" stroke-width="4"/>
+      <path d="M58 166 Q40 196 56 214 L70 208 Q60 192 76 170Z" fill="#1f7a4f"/><circle cx="62" cy="214" r="10" fill="url(#eSkin)"/>
+      <g class="e-wave"><path d="M144 162 Q176 150 186 112 L172 106 Q164 136 140 148Z" fill="#1f7a4f"/><circle cx="182" cy="104" r="11" fill="url(#eSkin)"/><path d="M174 116 l18 -4" stroke="url(#eFur)" stroke-width="8" stroke-linecap="round"/></g>
+      <path d="M78 146 Q110 166 142 146 Q132 160 110 162 Q88 160 78 146Z" fill="url(#eFur)"/>
+      <g class="e-head">
+        <path d="M74 100 L34 80 Q48 104 76 116Z" fill="url(#eSkin)"/><path d="M146 100 L186 80 Q172 104 144 116Z" fill="url(#eSkin)"/>
+        <path d="M70 92 Q60 140 76 168 Q82 150 80 120Z" fill="url(#eHair)"/><path d="M150 92 Q160 140 144 168 Q138 150 140 120Z" fill="url(#eHair)"/>
+        <circle cx="76" cy="168" r="6" fill="#2fae6b"/><circle cx="144" cy="168" r="6" fill="#2fae6b"/>
+        <circle cx="110" cy="104" r="42" fill="url(#eSkin)"/>
+        <path d="M70 92 Q84 66 110 66 Q138 66 150 92 Q132 80 118 86 Q100 76 86 88 Q78 84 70 92Z" fill="url(#eHair)"/>
+        <g class="e-eyes"><ellipse cx="95" cy="104" rx="6" ry="8" fill="#2a1a10"/><ellipse cx="125" cy="104" rx="6" ry="8" fill="#2a1a10"/><circle cx="97" cy="101" r="2.4" fill="#fff"/><circle cx="127" cy="101" r="2.4" fill="#fff"/></g>
+        <path d="M86 92 q8 -6 16 -2 M118 90 q8 -4 16 2" stroke="#8a3a15" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <circle cx="84" cy="120" r="9" fill="#ff7b86" opacity=".45"/><circle cx="136" cy="120" r="9" fill="#ff7b86" opacity=".45"/>
+        ${[[80, 114], [86, 118], [134, 114], [140, 118]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.4" fill="#b8643a"/>`).join('')}
+        <path d="M107 114 q3 4 6 0" stroke="#c97a5a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <g class="e-mouth"><path d="M98 124 Q110 138 122 124 Q110 130 98 124Z" fill="#a3172a"/></g>
+        <path d="M66 82 Q80 10 176 26 Q150 34 150 54 Q156 70 150 80Z" fill="url(#eHat)"/>
+        <rect x="62" y="70" width="96" height="20" rx="10" fill="url(#eFur)"/>
+        <g class="e-bell"><circle cx="178" cy="28" r="10" fill="#f2b632" stroke="#c48b16" stroke-width="2"/><circle cx="178" cy="32" r="2.5" fill="#7a5418"/></g>
+      </g>
+    </g>
+  </svg>`;
 
   window.ART = A;
 })();
