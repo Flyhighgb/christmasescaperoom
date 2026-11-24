@@ -161,6 +161,7 @@
             <div class="err"></div>
           </div>
           <div class="fineprint">Best on a laptop or tablet. Sit together, or chat on a video call while you play.</div>
+          <a class="teams-link" href="/work-teams">🎁 Playing with your work team? Here's how</a>
         </div>
       </div>`;
     const nm = $('#nm');
