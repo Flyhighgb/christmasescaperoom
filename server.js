@@ -12,13 +12,17 @@ const SAVE = process.env.SAVE_FILE || path.join(__dirname, '.rooms.json');
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json',
+  '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8',
 };
 
 const server = http.createServer((req, res) => {
   let p;
   try { p = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end(); }
   if (p === '/health') { res.writeHead(200); return res.end('ok'); }
-  if (p === '/' || !path.extname(p)) p = '/index.html';
+  // Extra pages (e.g. /work-teams) are plain .html files; anything else without an extension is the game.
+  const page = p.replace(/\/+$/, '');
+  if (page && /^\/[a-z0-9-]+$/.test(page) && page !== '/index' && fs.existsSync(path.join(PUB, page + '.html'))) p = page + '.html';
+  else if (p === '/' || !path.extname(p)) p = '/index.html';
   const f = path.normalize(path.join(PUB, p));
   if (!f.startsWith(PUB)) { res.writeHead(403); return res.end(); }
   fs.readFile(f, (e, d) => {
